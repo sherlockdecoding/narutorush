@@ -31,6 +31,10 @@
         #combo-txt { font-family: 'Permanent Marker', cursive; transition: transform 0.15s, opacity 0.15s; }
         .stat-row { display:flex; justify-content:space-between; width:220px; font-family:'Rajdhani',sans-serif; font-size:15px; color:#9ca3af; letter-spacing:1px; text-transform:uppercase; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
         .stat-row b { color:#fff; font-size:17px; }
+        #vignette { position:absolute; inset:0; pointer-events:none; z-index:40; box-shadow: inset 0 0 140px 40px rgba(0,0,0,0.7); }
+        #low-hp-pulse { position:absolute; inset:0; pointer-events:none; z-index:41; box-shadow: inset 0 0 100px 20px rgba(255,0,0,0); transition: box-shadow 0.3s; }
+        @keyframes overlayIn { from { opacity:0; transform: scale(0.96); } to { opacity:1; transform: scale(1); } }
+        #overlay.show-anim { animation: overlayIn 0.4s ease-out; }
     </style>
 </head>
 <body>
@@ -55,6 +59,9 @@
             </div>
         </div>
     </div>
+
+    <div id="vignette"></div>
+    <div id="low-hp-pulse"></div>
 
     <div id="controls">
         <div id="btn-dash" class="ctrl-btn">
@@ -90,7 +97,7 @@
             step: 0,
             playTick: function() {
                 const now = audioCtx.currentTime;
-                const scale = bossMode ? this.bossNotes : this.notes;
+                const scaleN = bossMode ? this.bossNotes : this.notes;
                 if (this.step % 2 === 0) {
                     const osc = audioCtx.createOscillator();
                     const g = audioCtx.createGain();
@@ -98,8 +105,7 @@
                     osc.frequency.setValueAtTime(bossMode ? 46 : 55, now);
                     g.gain.setValueAtTime(bossMode ? 0.22 : 0.15, now);
                     g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                    osc.connect(g);
-                    g.connect(audioCtx.destination);
+                    osc.connect(g); g.connect(audioCtx.destination);
                     osc.start(); osc.stop(now + 0.2);
                 }
                 if (this.step % 4 === 2) {
@@ -111,13 +117,12 @@
                     const g = audioCtx.createGain();
                     g.gain.setValueAtTime(0.05, now);
                     g.gain.linearRampToValueAtTime(0, now + 0.05);
-                    noise.connect(g);
-                    g.connect(audioCtx.destination);
+                    noise.connect(g); g.connect(audioCtx.destination);
                     noise.start();
                 }
                 const melodyPattern = [0, 2, 3, 2, 4, 3, 2, 0];
                 const noteIdx = melodyPattern[this.step % 8];
-                const freq = scale[noteIdx] * (this.step % 16 > 8 ? 2 : 1);
+                const freq = scaleN[noteIdx] * (this.step % 16 > 8 ? 2 : 1);
                 const osc = audioCtx.createOscillator();
                 const g = audioCtx.createGain();
                 osc.type = 'sawtooth';
@@ -126,22 +131,18 @@
                 lfo.frequency.value = bossMode ? 8 : 5;
                 const lfoGain = audioCtx.createGain();
                 lfoGain.gain.value = bossMode ? 16 : 10;
-                lfo.connect(lfoGain);
-                lfoGain.connect(osc.frequency);
+                lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
                 lfo.start();
                 g.gain.setValueAtTime(0.04, now);
                 g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-                osc.connect(g);
-                g.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(now + 0.4);
+                osc.connect(g); g.connect(audioCtx.destination);
+                osc.start(); osc.stop(now + 0.4);
                 lfo.stop(now + 0.4);
                 this.step++;
             },
             start: function() {
                 if(musicPlaying) return;
-                musicPlaying = true;
-                this.step = 0;
+                musicPlaying = true; this.step = 0;
                 musicInterval = setInterval(() => this.playTick(), bossMode ? 168 : 214);
             },
             retune: function() {
@@ -149,47 +150,38 @@
                 clearInterval(musicInterval);
                 musicInterval = setInterval(() => this.playTick(), bossMode ? 168 : 214);
             },
-            stop: function() {
-                musicPlaying = false;
-                clearInterval(musicInterval);
-            }
+            stop: function() { musicPlaying = false; clearInterval(musicInterval); }
         };
 
         const Sfx = {
             dash: () => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                 osc.type = 'triangle';
                 osc.frequency.setValueAtTime(400, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
                 gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
+                osc.connect(gain); gain.connect(audioCtx.destination);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.1);
             },
             jutsu: (isPower) => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                 osc.type = isPower ? 'sawtooth' : 'sine';
                 osc.frequency.setValueAtTime(isPower ? 100 : 800, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(20, audioCtx.currentTime + 0.3);
                 gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
                 gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
+                osc.connect(gain); gain.connect(audioCtx.destination);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.3);
             },
             deny: () => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(180, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(90, audioCtx.currentTime + 0.12);
                 gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
+                osc.connect(gain); gain.connect(audioCtx.destination);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.12);
             },
             hit: () => {
@@ -202,57 +194,57 @@
                 const gain = audioCtx.createGain();
                 gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-                noise.connect(gain);
-                gain.connect(audioCtx.destination);
+                noise.connect(gain); gain.connect(audioCtx.destination);
                 noise.start();
             },
             kill: (pitchBoost) => {
                 [440, 660, 880].forEach((f, i) => {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                     osc.frequency.setValueAtTime(f * pitchBoost, audioCtx.currentTime + i * 0.04);
                     gain.gain.setValueAtTime(0.1, audioCtx.currentTime + i * 0.04);
                     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.04 + 0.18);
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
+                    osc.connect(gain); gain.connect(audioCtx.destination);
                     osc.start(audioCtx.currentTime + i * 0.04);
                     osc.stop(audioCtx.currentTime + i * 0.04 + 0.18);
                 });
             },
             powerup: () => {
                 [440, 660, 880].forEach((f, i) => {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
+                    const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                     osc.frequency.setValueAtTime(f, audioCtx.currentTime + i * 0.05);
                     gain.gain.setValueAtTime(0.1, audioCtx.currentTime + i * 0.05);
                     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.05 + 0.2);
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
+                    osc.connect(gain); gain.connect(audioCtx.destination);
                     osc.start(audioCtx.currentTime + i * 0.05);
                     osc.stop(audioCtx.currentTime + i * 0.05 + 0.2);
                 });
             },
             warning: () => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(140, audioCtx.currentTime);
                 gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
+                osc.connect(gain); gain.connect(audioCtx.destination);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.6);
             },
+            telegraph: () => {
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(900, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            },
             explosion: () => {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(100, audioCtx.currentTime);
                 osc.frequency.linearRampToValueAtTime(40, audioCtx.currentTime + 1);
                 gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
+                osc.connect(gain); gain.connect(audioCtx.destination);
                 osc.start(); osc.stop(audioCtx.currentTime + 1);
             }
         };
@@ -269,6 +261,7 @@
         const overlay = document.getElementById('overlay');
         const statsBox = document.getElementById('stats-box');
         const bestTxt = document.getElementById('best-txt');
+        const lowHpPulse = document.getElementById('low-hp-pulse');
 
         const V_WIDTH = 400;
         let V_HEIGHT = 800;
@@ -280,13 +273,14 @@
             x: 60, y: 0, targetX: 60, side: 0, hp: 100,
             kuramaMode: 0, kuramaMax: 400, sasukeTimer: 0, trail: [],
             width: 40, height: 60, finisher: false, finisherX: 0, finisherY: 0, defaultY: 0,
-            chakra: 100, chakraMax: 100
+            chakra: 100, chakraMax: 100, attackAnim: 0
         };
 
         let entities = [];
         let particles = [];
         let floaters = [];
-        let bgLines = [];
+        let leaves = [];
+        let roofs = [];
         let clouds = [];
         let distance = 0;
         let score = 0;
@@ -294,6 +288,9 @@
         let comboTimer = 0;
         let frameCount = 0;
         let shake = 0;
+        let punch = 0;
+        let hitStop = 0;
+        let jutsuFlash = 0;
         let itachiRef = null;
         let bossWarned = false;
 
@@ -310,26 +307,16 @@
 
         function spawnPart(x, y, color, count=5, speed=8) {
             for(let i=0; i<count; i++) {
-                particles.push({
-                    x, y, vx: (Math.random()-0.5)*speed, vy: (Math.random()-0.5)*speed,
-                    life: 1, c: color, s: Math.random()*4 + 2
-                });
+                particles.push({ x, y, vx: (Math.random()-0.5)*speed, vy: (Math.random()-0.5)*speed, life: 1, c: color, s: Math.random()*4 + 2 });
             }
         }
-
-        function spawnFloater(x, y, text, color) {
-            floaters.push({ x, y, text, color, life: 1, vy: -1.4 });
-        }
-
+        function spawnFloater(x, y, text, color) { floaters.push({ x, y, text, color, life: 1, vy: -1.4 }); }
         function addScore(amount, x, y) {
-            score += amount;
-            scoreTxt.innerText = score;
+            score += amount; scoreTxt.innerText = score;
             if (x !== undefined) spawnFloater(x, y, '+' + amount, '#fbbf24');
         }
-
         function registerKill(x, y, isBoss) {
-            combo++;
-            comboTimer = 100;
+            combo++; comboTimer = 100;
             const bonus = 50 + combo * 10;
             addScore(bonus, x, y);
             comboTxt.innerText = 'COMBO x' + combo;
@@ -339,42 +326,30 @@
             Sfx.kill(1 + Math.min(combo, 8) * 0.05);
             vibrate(isBoss ? 40 : 15);
         }
-
-        function breakCombo() {
-            if (combo > 0) { combo = 0; comboTimer = 0; comboTxt.style.opacity = '0'; }
-        }
+        function breakCombo() { if (combo > 0) { combo = 0; comboTimer = 0; comboTxt.style.opacity = '0'; } }
 
         function initGame() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             bossMode = false;
             Music.start();
             state = 'PLAY';
-            player.hp = 100;
-            player.chakra = 100;
-            player.kuramaMode = 0;
-            player.sasukeTimer = 0;
-            player.finisher = false;
-            player.side = 0;
-            player.targetX = 60;
-            player.x = 60;
-            player.y = player.defaultY;
-            distance = 0;
-            score = 0;
-            combo = 0;
-            comboTimer = 0;
-            entities = [];
-            particles = [];
-            floaters = [];
-            itachiRef = null;
-            bossWarned = false;
-            frameCount = 0;
+            player.hp = 100; player.chakra = 100; player.kuramaMode = 0; player.sasukeTimer = 0;
+            player.finisher = false; player.side = 0; player.targetX = 60; player.x = 60; player.y = player.defaultY;
+            player.attackAnim = 0;
+            distance = 0; score = 0; combo = 0; comboTimer = 0;
+            entities = []; particles = []; floaters = [];
+            itachiRef = null; bossWarned = false; frameCount = 0;
+            punch = 0; hitStop = 0; jutsuFlash = 0;
             overlay.style.display = 'none';
             document.body.classList.remove('flash-red');
             phaseLabel.innerText = "Infiltration";
             comboTxt.style.opacity = '0';
             scoreTxt.innerText = '0';
-            bgLines = [];
-            for(let i=0; i<20; i++) bgLines.push({x: Math.random()*V_WIDTH, y: Math.random()*V_HEIGHT, l: Math.random()*50+20});
+            lowHpPulse.style.boxShadow = 'inset 0 0 100px 20px rgba(255,0,0,0)';
+            leaves = [];
+            for(let i=0; i<14; i++) leaves.push({ x: Math.random()*V_WIDTH, y: Math.random()*V_HEIGHT, r: Math.random()*Math.PI*2, s: Math.random()*0.6+0.5, sway: Math.random()*Math.PI*2, sz: Math.random()*4+4 });
+            roofs = [];
+            for(let i=0; i<6; i++) roofs.push({ x: i*90 - 40, y: 300 + Math.random()*20, w: 70, lantern: Math.random() > 0.4 });
             clouds = [];
             for(let i=0; i<5; i++) clouds.push({x: Math.random()*V_WIDTH, y: Math.random()*200+20, w: Math.random()*60+40, s: Math.random()*0.3+0.1});
         }
@@ -382,18 +357,20 @@
         function update() {
             if (state !== 'PLAY') return;
             if (player.finisher) { updateFinisher(); return; }
+            if (hitStop > 0) { hitStop--; return; }
             frameCount++;
             distance += 1.2;
             if (shake > 0) shake *= 0.85;
+            if (punch > 0) punch *= 0.8;
+            if (jutsuFlash > 0) jutsuFlash -= 0.08;
+            if (player.attackAnim > 0) player.attackAnim--;
             player.x += (player.targetX - player.x) * 0.25;
             player.trail.push({x: player.x, y: player.y});
             if (player.trail.length > 6) player.trail.shift();
             if (player.kuramaMode > 0) {
                 player.kuramaMode--;
                 kuramaFill.style.width = (player.kuramaMode / player.kuramaMax * 100) + '%';
-            } else {
-                kuramaFill.style.width = '0%';
-            }
+            } else { kuramaFill.style.width = '0%'; }
             if (player.sasukeTimer > 0) player.sasukeTimer--;
             if (player.chakra < player.chakraMax) {
                 player.chakra = Math.min(player.chakraMax, player.chakra + 0.16);
@@ -402,11 +379,17 @@
             }
             if (comboTimer > 0) { comboTimer--; if (comboTimer === 0) breakCombo(); }
 
+            lowHpPulse.style.boxShadow = player.hp < 30
+                ? 'inset 0 0 ' + (60 + Math.sin(frameCount*0.25)*30) + 'px 20px rgba(255,0,0,' + (0.35 + Math.sin(frameCount*0.25)*0.15) + ')'
+                : 'inset 0 0 100px 20px rgba(255,0,0,0)';
+
             clouds.forEach(c => { c.x -= c.s; if (c.x < -80) c.x = V_WIDTH + 80; });
-            bgLines.forEach(l => {
-                l.y += 25;
-                if(l.y > V_HEIGHT) { l.y = -50; l.x = Math.random()*V_WIDTH; }
+            roofs.forEach(r => { r.x -= 2.2; if (r.x < -100) r.x = V_WIDTH + 40; });
+            leaves.forEach(l => {
+                l.y += l.s * 1.6; l.sway += 0.03; l.x += Math.sin(l.sway) * 0.8; l.r += 0.02;
+                if (l.y > V_HEIGHT + 20) { l.y = -20; l.x = Math.random()*V_WIDTH; }
             });
+
             if (distance < 1200) {
                 if (frameCount % 120 === 0) {
                     const items = ['ramen', 'scroll', 'bandage'];
@@ -420,29 +403,25 @@
                 }
             }
             if (Math.floor(distance) >= 1200 && !itachiRef) {
-                itachiRef = { type: 'itachi', x: 200, y: -100, targetX: 200, hp: 300, maxHp: 300, phase: 1, phaseAnnounced: false };
+                itachiRef = { type: 'itachi', x: 200, y: -100, targetX: 200, hp: 300, maxHp: 300, phase: 1, phaseAnnounced: false, fireRate: 50 };
                 entities.push(itachiRef);
                 phaseLabel.innerText = "The Final Confrontation";
-                bossMode = true;
-                Music.retune();
-                Sfx.powerup();
+                bossMode = true; Music.retune(); Sfx.powerup();
             }
             if (itachiRef && itachiRef.hp <= 150 && !itachiRef.phaseAnnounced) {
-                itachiRef.phaseAnnounced = true;
-                itachiRef.phase = 2;
+                itachiRef.phaseAnnounced = true; itachiRef.phase = 2; itachiRef.fireRate = 30;
                 phaseLabel.innerText = "Mangekyō Unleashed";
-                shake = 25;
-                Sfx.warning();
+                shake = 25; punch = 1; Sfx.warning();
                 spawnFloater(itachiRef.x, itachiRef.y - 40, 'SHARINGAN!', '#ff3333');
             }
             if (player.sasukeTimer > 0 && frameCount % 30 === 0) {
                 entities.push({ type: 'chidori_senbon', x: player.x + (player.side==0?80:-40), y: player.y });
             }
+
             for (let i = entities.length - 1; i >= 0; i--) {
                 let e = entities[i];
                 if (['ramen', 'scroll', 'bandage'].includes(e.type)) {
-                    const dx = (player.x + 20) - e.x;
-                    const dy = (player.y + 30) - e.y;
+                    const dx = (player.x + 20) - e.x, dy = (player.y + 30) - e.y;
                     if (Math.sqrt(dx*dx + dy*dy) < 150) { e.x += dx * 0.15; e.y += dy * 0.15; }
                 }
                 if (['rasenshuriken', 'beast_bomb', 'chidori_senbon'].includes(e.type)) {
@@ -451,41 +430,34 @@
                     e.y += (150 - e.y) * 0.05;
                     if (frameCount % 60 === 0) e.targetX = 100 + Math.random() * 200;
                     e.x += (e.targetX - e.x) * 0.08;
-                    const rate = e.phase === 2 ? 30 : 50;
+                    const rate = e.fireRate;
+                    const untilFire = rate - (frameCount % rate);
+                    e.telegraph = untilFire <= 15;
+                    if (e.telegraph && untilFire === 15) Sfx.telegraph();
                     if (frameCount % rate === 0) {
                         const count = e.phase === 2 ? 6 : (e.hp < 150 ? 5 : 3);
                         for(let k=0; k<count; k++) entities.push({ type: 'kunai', x: e.x + (k - Math.floor(count/2))*40, y: e.y + 30 });
                     }
                 } else { e.y += 12; }
-                const pdx = (player.x + 20) - e.x;
-                const pdy = (player.y + 30) - e.y;
+
+                const pdx = (player.x + 20) - e.x, pdy = (player.y + 30) - e.y;
                 if (Math.sqrt(pdx*pdx + pdy*pdy) < 45) {
                     if (['shuriken', 'shinobi', 'kunai'].includes(e.type)) {
                         if (player.kuramaMode <= 0) {
-                            player.hp -= 15; shake = 15; Sfx.hit();
+                            player.hp -= 15; shake = 15; punch = 0.6; hitStop = 4; Sfx.hit();
                             spawnPart(e.x, e.y, '#f00', 10);
-                            vibrate(25);
-                            breakCombo();
+                            vibrate(25); breakCombo();
                             entities.splice(i, 1);
-                        } else {
-                            spawnPart(e.x, e.y, '#ff0', 5);
-                            entities.splice(i, 1);
-                        }
+                        } else { spawnPart(e.x, e.y, '#ff0', 5); entities.splice(i, 1); }
                     } else if (e.type === 'ramen') {
                         player.hp = Math.min(100, player.hp + 40);
-                        addScore(10, e.x, e.y);
-                        Sfx.powerup(); entities.splice(i, 1);
+                        addScore(10, e.x, e.y); Sfx.powerup(); entities.splice(i, 1);
                     } else if (e.type === 'scroll') {
-                        player.kuramaMode = player.kuramaMax;
-                        player.chakra = player.chakraMax;
-                        addScore(20, e.x, e.y);
-                        shake = 10; Sfx.powerup();
-                        spawnPart(player.x+20, player.y+30, '#ff8000', 20);
-                        entities.splice(i, 1);
+                        player.kuramaMode = player.kuramaMax; player.chakra = player.chakraMax;
+                        addScore(20, e.x, e.y); shake = 10; Sfx.powerup();
+                        spawnPart(player.x+20, player.y+30, '#ff8000', 20); entities.splice(i, 1);
                     } else if (e.type === 'bandage') {
-                        player.sasukeTimer = 600;
-                        addScore(15, e.x, e.y);
-                        Sfx.powerup(); entities.splice(i, 1);
+                        player.sasukeTimer = 600; addScore(15, e.x, e.y); Sfx.powerup(); entities.splice(i, 1);
                     }
                 }
                 if (['rasenshuriken', 'beast_bomb', 'chidori_senbon'].includes(e.type)) {
@@ -493,10 +465,9 @@
                         if (['shinobi', 'itachi'].includes(target.type)) {
                             if (Math.sqrt((e.x - target.x)**2 + (e.y - target.y)**2) < 65) {
                                 const dmg = e.type === 'beast_bomb' ? 60 : (e.type === 'rasenshuriken' ? 25 : 10);
-                                target.hp -= dmg;
-                                e.dead = true;
+                                target.hp -= dmg; e.dead = true;
                                 spawnPart(target.x, target.y, '#4facfe', 12);
-                                if (target.type !== 'itachi') Sfx.hit();
+                                if (target.type !== 'itachi') { Sfx.hit(); } else { hitStop = 3; punch = 0.4; }
                             }
                         }
                     });
@@ -505,10 +476,7 @@
                 if (e.type === 'itachi' && e.hp <= 0) { registerKill(e.x, e.y, true); startFinisher(e); entities.splice(i, 1); }
                 else if (e.y < -300 || e.y > V_HEIGHT + 300 || e.hp <= 0 || e.dead) { entities.splice(i, 1); }
             }
-            floaters.forEach((f, i) => {
-                f.y += f.vy; f.life -= 0.02;
-                if (f.life <= 0) floaters.splice(i, 1);
-            });
+            floaters.forEach((f, i) => { f.y += f.vy; f.life -= 0.02; if (f.life <= 0) floaters.splice(i, 1); });
             hpFill.style.width = player.hp + '%';
             distTxt.innerText = Math.floor(distance);
             if (frameCount % 30 === 0) addScore(1);
@@ -516,19 +484,15 @@
         }
 
         function startFinisher(target) {
-            player.finisher = true;
-            player.finisherX = target.x;
-            player.finisherY = target.y;
-            player.finisherStep = 0;
+            player.finisher = true; player.finisherX = target.x; player.finisherY = target.y; player.finisherStep = 0;
             entities = [];
             document.body.classList.add('flash-red');
             Sfx.powerup();
         }
-
         function updateFinisher() {
             player.finisherStep++;
             if (player.finisherStep === 60) {
-                shake = 80;
+                shake = 80; punch = 1.4;
                 spawnPart(player.finisherX, player.finisherY, '#fff', 200, 30);
                 spawnPart(player.finisherX, player.finisherY, '#4facfe', 200, 35);
                 document.body.classList.remove('flash-red');
@@ -537,9 +501,11 @@
                 player.x += (player.finisherX - 20 - player.x) * 0.35;
                 player.y += (player.finisherY - 30 - player.y) * 0.35;
             } else if (player.finisherStep > 130) { showWinScreen(); }
+            if (shake > 0) shake *= 0.9;
+            if (punch > 0) punch *= 0.85;
         }
 
-        function renderStats(win) {
+        function renderStats() {
             sessionBest.score = Math.max(sessionBest.score, score);
             sessionBest.distance = Math.max(sessionBest.distance, Math.floor(distance));
             statsBox.classList.remove('hidden');
@@ -548,29 +514,128 @@
                 '<div class="stat-row"><span>Score</span><b>' + score + '</b></div>' +
                 '<div class="stat-row"><span>Best Combo</span><b>x' + Math.max(combo,1) + '</b></div>';
             bestTxt.innerText = 'SESSION BEST — ' + sessionBest.score + ' PTS · ' + sessionBest.distance + 'M';
+            overlay.classList.remove('show-anim'); void overlay.offsetWidth; overlay.classList.add('show-anim');
         }
-
         function showWinScreen() {
             state = 'MENU'; Music.stop(); bossMode = false; overlay.style.display = 'flex';
             document.getElementById('title-txt').innerText = "MISSION SUCCESS";
             document.getElementById('title-txt').style.color = "#4facfe";
             document.getElementById('desc-txt').innerText = "Itachi has fallen. The village is safe.";
-            renderStats(true);
+            renderStats();
         }
         function gameOver() {
             state = 'MENU'; Music.stop(); bossMode = false; overlay.style.display = 'flex';
             document.getElementById('title-txt').innerText = "MISSION FAILED";
             document.getElementById('title-txt').style.color = "#ff4d4d";
             document.getElementById('desc-txt').innerText = "The Will of Fire flickers... try again.";
-            renderStats(false);
+            renderStats();
             Sfx.hit();
+        }
+
+        function drawPlayer(kMode) {
+            const t = frameCount;
+            const moving = Math.abs(player.targetX - player.x) > 1.5;
+            const legSwing = moving ? Math.sin(t*0.35) : Math.sin(t*0.06)*0.2;
+            const armSwing = moving ? Math.sin(t*0.35 + Math.PI) : Math.sin(t*0.06)*0.2;
+            const lean = Math.max(-7, Math.min(7, (player.targetX - player.x) * 0.28));
+            const blink = (t % 180) < 6;
+            const atk = player.attackAnim > 0;
+            const bodyColor = kMode ? '#991b1b' : '#f97316';
+            const limbColor = kMode ? '#7f1d1d' : '#ea580c';
+
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(lean * Math.PI / 180);
+
+            if (kMode || player.finisher) {
+                ctx.save();
+                ctx.globalAlpha = 0.55 + Math.sin(t*0.3)*0.15;
+                ctx.strokeStyle = '#ff6a00'; ctx.lineWidth = 2;
+                ctx.shadowBlur = 25; ctx.shadowColor = '#ff8000';
+                ctx.beginPath();
+                for (let a = 0; a < 7; a++) {
+                    const ang = (a / 7) * Math.PI * 2 + t*0.02;
+                    const rad = 34 + Math.sin(t*0.2 + a) * 7;
+                    const px = 20 + Math.cos(ang) * rad, py = 45 + Math.sin(ang) * rad * 0.8;
+                    a === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+                }
+                ctx.closePath(); ctx.stroke();
+                ctx.restore();
+            }
+
+            // back leg
+            ctx.save(); ctx.translate(12, 66); ctx.rotate(-legSwing*0.5);
+            ctx.fillStyle = limbColor; ctx.fillRect(-4, 0, 8, 24); ctx.restore();
+            // back arm
+            ctx.save(); ctx.translate(3, 28); ctx.rotate(-armSwing*0.6 + (atk ? -0.8 : 0));
+            ctx.fillStyle = bodyColor; ctx.fillRect(-4, 0, 8, 22); ctx.restore();
+
+            // torso
+            ctx.fillStyle = bodyColor; ctx.fillRect(0, 20, 40, 46);
+
+            // front leg
+            ctx.save(); ctx.translate(28, 66); ctx.rotate(legSwing*0.5);
+            ctx.fillStyle = limbColor; ctx.fillRect(-4, 0, 8, 24); ctx.restore();
+
+            // headband tails fluttering behind head
+            ctx.save();
+            ctx.translate(6, 4);
+            ctx.strokeStyle = '#1e3a8a'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+            for (let s = 0; s < 2; s++) {
+                ctx.beginPath();
+                ctx.moveTo(0, s*4);
+                ctx.quadraticCurveTo(-10 + Math.sin(t*0.15 + s)*4, 10 + s*4, -16 + Math.sin(t*0.1+s)*6, 4 + s*6);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            // head
+            ctx.fillStyle = '#fce2c4'; ctx.beginPath(); ctx.arc(20, 10, 15, 0, 7); ctx.fill();
+
+            // spiky hair
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.moveTo(4, -1); ctx.lineTo(0, -15); ctx.lineTo(10, -5);
+            ctx.lineTo(14, -19); ctx.lineTo(20, -5); ctx.lineTo(26, -17);
+            ctx.lineTo(30, -3); ctx.lineTo(36, -13); ctx.lineTo(34, 3);
+            ctx.closePath(); ctx.fill();
+
+            // headband + plate
+            ctx.fillStyle = '#1e3a8a'; ctx.fillRect(5, -2, 30, 7);
+            ctx.fillStyle = '#cbd5e1'; ctx.fillRect(14, -2, 12, 7);
+
+            // eyes (blink)
+            ctx.fillStyle = '#1c1917';
+            if (blink) { ctx.fillRect(15, 9, 6, 1.5); ctx.fillRect(24, 9, 6, 1.5); }
+            else { ctx.beginPath(); ctx.arc(17, 9, 1.6, 0, 7); ctx.arc(26, 9, 1.6, 0, 7); ctx.fill(); }
+
+            // whiskers
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.4;
+            [4, 8].forEach(dy => {
+                ctx.beginPath(); ctx.moveTo(6, 14+dy); ctx.lineTo(13, 14+dy); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(27, 14+dy); ctx.lineTo(34, 14+dy); ctx.stroke();
+            });
+
+            // front arm (drawn last, can glow when attacking)
+            ctx.save(); ctx.translate(37, 28); ctx.rotate(armSwing*0.6 + (atk ? -1 : 0));
+            if (atk) { ctx.shadowBlur = 20; ctx.shadowColor = kMode ? '#ff3300' : '#4facfe'; }
+            ctx.fillStyle = bodyColor; ctx.fillRect(-4, 0, 8, 22);
+            if (atk) {
+                ctx.fillStyle = kMode ? 'rgba(255,60,0,0.7)' : 'rgba(79,172,254,0.7)';
+                ctx.beginPath(); ctx.arc(0, 22, 8, 0, 7); ctx.fill();
+            }
+            ctx.restore();
+
+            ctx.restore();
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
-            ctx.translate((canvas.width - V_WIDTH * scale) / 2, 0);
-            ctx.scale(scale, scale);
+            const punchScale = 1 + punch * 0.045;
+            ctx.translate(canvas.width/2, canvas.height/2);
+            ctx.scale(scale * punchScale, scale * punchScale);
+            ctx.translate(-V_WIDTH/2, -V_HEIGHT/2);
             if (shake > 0) ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
 
             const kMode = player.kuramaMode > 0;
@@ -578,12 +643,10 @@
             if (kMode) { bg.addColorStop(0, '#2a0a05'); bg.addColorStop(1, '#0a0202'); }
             else if (bossMode) { bg.addColorStop(0, '#0a0510'); bg.addColorStop(1, '#020205'); }
             else { bg.addColorStop(0, '#050510'); bg.addColorStop(1, '#020205'); }
-            ctx.fillStyle = bg;
-            ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
+            ctx.fillStyle = bg; ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
 
             // moon
-            ctx.save();
-            ctx.globalAlpha = 0.9;
+            ctx.save(); ctx.globalAlpha = 0.9;
             ctx.fillStyle = bossMode ? '#ff5555' : '#f1f5ff';
             ctx.shadowBlur = 25; ctx.shadowColor = ctx.fillStyle;
             ctx.beginPath(); ctx.arc(V_WIDTH - 60, 70, 26, 0, 7); ctx.fill();
@@ -593,25 +656,55 @@
             ctx.fillStyle = 'rgba(255,255,255,0.05)';
             clouds.forEach(c => { ctx.beginPath(); ctx.ellipse(c.x, c.y, c.w, c.w*0.35, 0, 0, 7); ctx.fill(); });
 
-            // village silhouette (hokage-style mountain skyline)
+            // far skyline
             ctx.fillStyle = '#0a0a14';
             ctx.beginPath();
             ctx.moveTo(0, 260);
             ctx.lineTo(40, 200); ctx.lineTo(90, 250); ctx.lineTo(140, 180);
             ctx.lineTo(190, 240); ctx.lineTo(240, 190); ctx.lineTo(290, 245);
             ctx.lineTo(340, 210); ctx.lineTo(V_WIDTH, 255);
-            ctx.lineTo(V_WIDTH, 300); ctx.lineTo(0, 300);
-            ctx.fill();
+            ctx.lineTo(V_WIDTH, 300); ctx.lineTo(0, 300); ctx.fill();
 
-            ctx.strokeStyle = kMode ? '#500' : '#1a1a2e';
-            ctx.lineWidth = 2;
-            bgLines.forEach(l => {
-                ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(l.x, l.y + l.l); ctx.stroke();
+            // mid rooftops with lantern glow (parallax)
+            roofs.forEach(r => {
+                ctx.fillStyle = '#12121e';
+                ctx.beginPath();
+                ctx.moveTo(r.x, r.y + 30); ctx.lineTo(r.x + r.w/2, r.y); ctx.lineTo(r.x + r.w, r.y + 30);
+                ctx.lineTo(r.x + r.w, r.y + 46); ctx.lineTo(r.x, r.y + 46); ctx.fill();
+                if (r.lantern) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.7 + Math.sin(frameCount*0.05 + r.x)*0.2;
+                    ctx.fillStyle = '#ffb347'; ctx.shadowBlur = 12; ctx.shadowColor = '#ffb347';
+                    ctx.beginPath(); ctx.arc(r.x + r.w/2, r.y + 18, 3, 0, 7); ctx.fill();
+                    ctx.restore();
+                }
             });
 
+            // speed streak lines (near layer)
+            ctx.strokeStyle = kMode ? 'rgba(150,0,0,0.5)' : 'rgba(255,255,255,0.08)';
+            ctx.lineWidth = 2;
+            for (let i=0; i<10; i++) {
+                const lx = (i * 43 + frameCount*3) % (V_WIDTH+40) - 20;
+                ctx.beginPath(); ctx.moveTo(lx, ((i*97)%V_HEIGHT)); ctx.lineTo(lx, ((i*97)%V_HEIGHT) + 35); ctx.stroke();
+            }
+
+            // ambient falling leaves
+            leaves.forEach(l => {
+                ctx.save();
+                ctx.translate(l.x, l.y); ctx.rotate(l.r);
+                ctx.globalAlpha = 0.55;
+                ctx.fillStyle = kMode ? '#ff8a4c' : '#f97316';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, l.sz, l.sz*0.5, 0, 0, 7);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.6;
+                ctx.beginPath(); ctx.moveTo(-l.sz, 0); ctx.lineTo(l.sz, 0); ctx.stroke();
+                ctx.restore();
+            });
+            ctx.globalAlpha = 1;
+
             particles.forEach((p, i) => {
-                ctx.globalAlpha = p.life;
-                ctx.fillStyle = p.c;
+                ctx.globalAlpha = p.life; ctx.fillStyle = p.c;
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, 7); ctx.fill();
                 p.x += p.vx; p.y += p.vy; p.life -= 0.02;
                 if (p.life <= 0) particles.splice(i, 1);
@@ -629,29 +722,61 @@
 
             entities.forEach(e => {
                 ctx.save(); ctx.translate(e.x, e.y);
-                if (e.type === 'shuriken') { ctx.rotate(frameCount*0.4); ctx.fillStyle = '#94a3b8'; for(let i=0; i<4; i++) { ctx.rotate(Math.PI/2); ctx.fillRect(-18, -2, 36, 4); } }
-                else if (e.type === 'kunai') { ctx.fillStyle = '#475569'; ctx.beginPath(); ctx.moveTo(0, 25); ctx.lineTo(8, 0); ctx.lineTo(-8, 0); ctx.fill(); }
+                if (e.type === 'shuriken') {
+                    ctx.rotate(frameCount*0.4); ctx.fillStyle = '#94a3b8';
+                    for(let i=0; i<4; i++) { ctx.rotate(Math.PI/2); ctx.fillRect(-18, -2, 36, 4); }
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(0,0,3,0,7); ctx.fill();
+                }
+                else if (e.type === 'kunai') {
+                    ctx.rotate(0.15);
+                    ctx.fillStyle = '#475569'; ctx.beginPath(); ctx.moveTo(0, 25); ctx.lineTo(8, 0); ctx.lineTo(-8, 0); ctx.fill();
+                    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(0, 22); ctx.lineTo(0, 3); ctx.stroke();
+                }
                 else if (e.type === 'shinobi') {
-                    ctx.fillStyle = '#1e293b'; ctx.fillRect(-15, 0, 30, 45);
+                    const walk = Math.sin(frameCount*0.3 + e.x);
+                    ctx.save(); ctx.translate(-6, 26); ctx.rotate(walk*0.4); ctx.fillStyle = '#111827'; ctx.fillRect(-3, 0, 6, 20); ctx.restore();
+                    ctx.save(); ctx.translate(6, 26); ctx.rotate(-walk*0.4); ctx.fillStyle = '#111827'; ctx.fillRect(-3, 0, 6, 20); ctx.restore();
+                    ctx.fillStyle = '#1e293b'; ctx.fillRect(-15, 0, 30, 30);
                     ctx.fillStyle = '#fce2c4'; ctx.beginPath(); ctx.arc(0, -5, 12, 0, 7); ctx.fill();
                     ctx.fillStyle = '#334155'; ctx.fillRect(-14, -12, 28, 6);
                 }
                 else if (e.type === 'itachi') {
+                    const hem = 6;
                     if (e.phase === 2) {
                         ctx.save(); ctx.globalAlpha = 0.35 + Math.sin(frameCount*0.15)*0.1;
                         ctx.strokeStyle = '#ff2020'; ctx.lineWidth = 3; ctx.shadowBlur = 30; ctx.shadowColor = '#ff0000';
                         ctx.beginPath();
                         ctx.moveTo(-70, 120); ctx.lineTo(0, -70); ctx.lineTo(70, 120);
                         ctx.moveTo(-50, 100); ctx.lineTo(0, -30); ctx.lineTo(50, 100);
-                        ctx.stroke();
-                        ctx.restore();
+                        ctx.stroke(); ctx.restore();
+                    }
+                    if (e.telegraph) {
+                        ctx.save(); ctx.globalAlpha = 0.5 + Math.sin(frameCount*0.6)*0.3;
+                        ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
+                        ctx.beginPath(); ctx.arc(0, 18, 40, 0, 7); ctx.stroke(); ctx.restore();
                     }
                     ctx.shadowBlur = 25; ctx.shadowColor = '#f00';
-                    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(-30, 90); ctx.lineTo(30, 90); ctx.lineTo(0, 0); ctx.fill();
+                    // cloak with wavy hem
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath(); ctx.moveTo(-30, 90); ctx.lineTo(0, 0); ctx.lineTo(30, 90);
+                    for (let x = 30; x >= -30; x -= 10) {
+                        const wob = Math.sin(frameCount*0.1 + x*0.3) * hem;
+                        ctx.lineTo(x, 90 + wob);
+                    }
+                    ctx.closePath(); ctx.fill();
                     ctx.fillStyle = '#fce2c4'; ctx.beginPath(); ctx.arc(0, 18, 12, 0, 7); ctx.fill();
                     ctx.fillStyle = '#7f1d1d'; ctx.fillRect(-8, 8, 16, 5);
+                    // glowing eyes
+                    ctx.save();
+                    ctx.globalAlpha = 0.7 + Math.sin(frameCount*0.2)*0.3;
+                    ctx.fillStyle = '#ff0000'; ctx.shadowBlur = 10; ctx.shadowColor = '#ff0000';
+                    ctx.beginPath(); ctx.arc(-4, 16, 1.8, 0, 7); ctx.arc(4, 16, 1.8, 0, 7); ctx.fill();
+                    ctx.restore();
                     ctx.fillStyle = '#222'; ctx.fillRect(-50, -60, 100, 8);
                     ctx.fillStyle = '#ff0000'; ctx.fillRect(-50, -60, (e.hp/e.maxHp)*100, 8);
+                    ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+                    for (let n=1;n<4;n++) { ctx.beginPath(); ctx.moveTo(-50+n*25, -60); ctx.lineTo(-50+n*25, -52); ctx.stroke(); }
                     ctx.shadowBlur = 0;
                 }
                 else if (e.type === 'rasenshuriken') { ctx.rotate(frameCount*0.6); ctx.fillStyle = '#4facfe'; ctx.shadowBlur = 15; ctx.shadowColor = '#4facfe'; for(let i=0; i<4; i++) { ctx.rotate(Math.PI/2); ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,30,0,1.2); ctx.fill(); } }
@@ -663,43 +788,26 @@
                 ctx.restore();
             });
 
-            ctx.save(); ctx.translate(player.x, player.y);
-            if (!player.finisher) { player.trail.forEach((t, i) => { ctx.globalAlpha = i * 0.08; ctx.fillStyle = kMode ? '#f00' : '#f97316'; ctx.fillRect(t.x - player.x, t.y - player.y + 20, 40, 50); }); }
-            ctx.globalAlpha = 1;
-            // body
-            ctx.fillStyle = kMode ? '#991b1b' : '#f97316'; ctx.fillRect(0, 20, 40, 50);
-            // head
-            ctx.fillStyle = '#fce2c4'; ctx.beginPath(); ctx.arc(20, 10, 16, 0, 7); ctx.fill();
-            // spiky hair
-            ctx.fillStyle = '#fbbf24';
-            ctx.beginPath();
-            ctx.moveTo(4, -2); ctx.lineTo(0, -16); ctx.lineTo(10, -6);
-            ctx.lineTo(14, -20); ctx.lineTo(20, -6); ctx.lineTo(26, -18);
-            ctx.lineTo(30, -4); ctx.lineTo(36, -14); ctx.lineTo(34, 2);
-            ctx.closePath(); ctx.fill();
-            // headband
-            ctx.fillStyle = '#1e3a8a'; ctx.fillRect(5, -2, 30, 8);
-            ctx.fillStyle = '#cbd5e1'; ctx.fillRect(14, -2, 12, 8);
-            // whiskers
-            ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5;
-            [6, 10].forEach(dy => {
-                ctx.beginPath(); ctx.moveTo(8, 12+dy); ctx.lineTo(15, 12+dy); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(25, 12+dy); ctx.lineTo(32, 12+dy); ctx.stroke();
-            });
-            if (kMode || player.finisher) {
-                ctx.shadowBlur = 30; ctx.shadowColor = '#4facfe';
-                ctx.strokeStyle = 'rgba(255,140,0,0.6)'; ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.arc(20, 45, 25 + Math.sin(frameCount*0.2)*8, 0, 7); ctx.stroke();
-                ctx.shadowBlur = 0;
+            if (!player.finisher) {
+                player.trail.forEach((t, i) => {
+                    ctx.globalAlpha = i * 0.07;
+                    ctx.fillStyle = kMode ? '#f00' : '#f97316';
+                    ctx.fillRect(t.x, t.y + 20, 40, 50);
+                });
+                ctx.globalAlpha = 1;
             }
-            if (player.sasukeTimer > 0) {
-                let sx = player.side === 0 ? 90 : -50;
-                ctx.fillStyle = '#1e1b4b'; ctx.fillRect(sx, 15, 30, 50);
-                ctx.fillStyle = '#818cf8'; ctx.beginPath(); ctx.arc(sx+15, 5, 12, 0, 7); ctx.fill();
-                ctx.fillStyle = '#312e81'; ctx.fillRect(sx+3, -1, 24, 6);
+            drawPlayer(kMode);
+
+            ctx.restore();
+
+            if (jutsuFlash > 0) {
+                ctx.save();
+                ctx.globalAlpha = Math.min(jutsuFlash, 0.35);
+                ctx.fillStyle = kMode ? '#ff3300' : '#4facfe';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
             }
-            ctx.restore();
-            ctx.restore();
+
             requestAnimationFrame(draw);
         }
 
@@ -710,6 +818,8 @@
             if (player.kuramaMode <= 0) { player.chakra -= 20; chakraFill.style.width = player.chakra + '%'; }
             entities.push({ type, x: player.x + 20, y: player.y });
             spawnPart(player.x + 20, player.y, player.kuramaMode > 0 ? '#f00' : '#4facfe', 15);
+            player.attackAnim = 12;
+            jutsuFlash = 1;
             Sfx.jutsu(player.kuramaMode > 0);
         }
         function handleDash() {
