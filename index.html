@@ -85,6 +85,27 @@
     <canvas id="game"></canvas>
 
     <script>
+        // Preload & setup image objects
+        const images = {};
+        const imageSources = {
+            narutoRun: '1000022151.png',
+            narutoJutsu: '1000022154.png',
+            kuramaRun: '1000022158.png',
+            kuramaJutsu: '1000022161.png',
+            enemyShinobi: '1000022167.png',
+            sasuke: '1000022170.png',
+            itachiBase: '1000022174.png',
+            itachiAttack: '1000022176.png'
+        };
+
+        let imagesLoaded = 0;
+        const totalImages = Object.keys(imageSources).length;
+        for (let key in imageSources) {
+            images[key] = new Image();
+            images[key].src = imageSources[key];
+            images[key].onload = () => { imagesLoaded++; };
+        }
+
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioCtx();
         let musicPlaying = false;
@@ -414,9 +435,6 @@
                 shake = 25; punch = 1; Sfx.warning();
                 spawnFloater(itachiRef.x, itachiRef.y - 40, 'SHARINGAN!', '#ff3333');
             }
-            if (player.sasukeTimer > 0 && frameCount % 30 === 0) {
-                entities.push({ type: 'chidori_senbon', x: player.x + (player.side==0?80:-40), y: player.y });
-            }
 
             for (let i = entities.length - 1; i >= 0; i--) {
                 let e = entities[i];
@@ -533,98 +551,38 @@
         }
 
         function drawPlayer(kMode) {
-            const t = frameCount;
-            const moving = Math.abs(player.targetX - player.x) > 1.5;
-            const legSwing = moving ? Math.sin(t*0.35) : Math.sin(t*0.06)*0.2;
-            const armSwing = moving ? Math.sin(t*0.35 + Math.PI) : Math.sin(t*0.06)*0.2;
-            const lean = Math.max(-7, Math.min(7, (player.targetX - player.x) * 0.28));
-            const blink = (t % 180) < 6;
-            const atk = player.attackAnim > 0;
-            const bodyColor = kMode ? '#991b1b' : '#f97316';
-            const limbColor = kMode ? '#7f1d1d' : '#ea580c';
+            const lean = Math.max(-10, Math.min(10, (player.targetX - player.x) * 0.28));
+            const isAttacking = player.attackAnim > 0 || player.finisher;
 
             ctx.save();
-            ctx.translate(player.x, player.y);
+            ctx.translate(player.x + 20, player.y + 30);
             ctx.rotate(lean * Math.PI / 180);
 
-            if (kMode || player.finisher) {
+            if (kMode) {
                 ctx.save();
-                ctx.globalAlpha = 0.55 + Math.sin(t*0.3)*0.15;
-                ctx.strokeStyle = '#ff6a00'; ctx.lineWidth = 2;
-                ctx.shadowBlur = 25; ctx.shadowColor = '#ff8000';
-                ctx.beginPath();
-                for (let a = 0; a < 7; a++) {
-                    const ang = (a / 7) * Math.PI * 2 + t*0.02;
-                    const rad = 34 + Math.sin(t*0.2 + a) * 7;
-                    const px = 20 + Math.cos(ang) * rad, py = 45 + Math.sin(ang) * rad * 0.8;
-                    a === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-                }
-                ctx.closePath(); ctx.stroke();
+                ctx.globalAlpha = 0.5 + Math.sin(frameCount * 0.3) * 0.2;
+                ctx.shadowBlur = 30; ctx.shadowColor = '#ff3300';
                 ctx.restore();
             }
 
-            // back leg
-            ctx.save(); ctx.translate(12, 66); ctx.rotate(-legSwing*0.5);
-            ctx.fillStyle = limbColor; ctx.fillRect(-4, 0, 8, 24); ctx.restore();
-            // back arm
-            ctx.save(); ctx.translate(3, 28); ctx.rotate(-armSwing*0.6 + (atk ? -0.8 : 0));
-            ctx.fillStyle = bodyColor; ctx.fillRect(-4, 0, 8, 22); ctx.restore();
-
-            // torso
-            ctx.fillStyle = bodyColor; ctx.fillRect(0, 20, 40, 46);
-
-            // front leg
-            ctx.save(); ctx.translate(28, 66); ctx.rotate(legSwing*0.5);
-            ctx.fillStyle = limbColor; ctx.fillRect(-4, 0, 8, 24); ctx.restore();
-
-            // headband tails fluttering behind head
-            ctx.save();
-            ctx.translate(6, 4);
-            ctx.strokeStyle = '#1e3a8a'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-            for (let s = 0; s < 2; s++) {
-                ctx.beginPath();
-                ctx.moveTo(0, s*4);
-                ctx.quadraticCurveTo(-10 + Math.sin(t*0.15 + s)*4, 10 + s*4, -16 + Math.sin(t*0.1+s)*6, 4 + s*6);
-                ctx.stroke();
+            if (isAttacking) {
+                const img = kMode ? images.kuramaJutsu : images.narutoJutsu;
+                if (img && img.complete && img.naturalWidth !== 0) {
+                    ctx.drawImage(img, -45, -55, 90, 110);
+                }
+            } else {
+                const sheet = kMode ? images.kuramaRun : images.narutoRun;
+                if (sheet && sheet.complete && sheet.naturalWidth !== 0) {
+                    const frameIndex = Math.floor(frameCount / 6) % 4;
+                    const frameWidth = sheet.naturalWidth / 4;
+                    const frameHeight = sheet.naturalHeight;
+                    ctx.drawImage(
+                        sheet,
+                        frameIndex * frameWidth, 0, frameWidth, frameHeight,
+                        -35, -45, 70, 90
+                    );
+                }
             }
-            ctx.restore();
-
-            // head
-            ctx.fillStyle = '#fce2c4'; ctx.beginPath(); ctx.arc(20, 10, 15, 0, 7); ctx.fill();
-
-            // spiky hair
-            ctx.fillStyle = '#fbbf24';
-            ctx.beginPath();
-            ctx.moveTo(4, -1); ctx.lineTo(0, -15); ctx.lineTo(10, -5);
-            ctx.lineTo(14, -19); ctx.lineTo(20, -5); ctx.lineTo(26, -17);
-            ctx.lineTo(30, -3); ctx.lineTo(36, -13); ctx.lineTo(34, 3);
-            ctx.closePath(); ctx.fill();
-
-            // headband + plate
-            ctx.fillStyle = '#1e3a8a'; ctx.fillRect(5, -2, 30, 7);
-            ctx.fillStyle = '#cbd5e1'; ctx.fillRect(14, -2, 12, 7);
-
-            // eyes (blink)
-            ctx.fillStyle = '#1c1917';
-            if (blink) { ctx.fillRect(15, 9, 6, 1.5); ctx.fillRect(24, 9, 6, 1.5); }
-            else { ctx.beginPath(); ctx.arc(17, 9, 1.6, 0, 7); ctx.arc(26, 9, 1.6, 0, 7); ctx.fill(); }
-
-            // whiskers
-            ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.4;
-            [4, 8].forEach(dy => {
-                ctx.beginPath(); ctx.moveTo(6, 14+dy); ctx.lineTo(13, 14+dy); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(27, 14+dy); ctx.lineTo(34, 14+dy); ctx.stroke();
-            });
-
-            // front arm (drawn last, can glow when attacking)
-            ctx.save(); ctx.translate(37, 28); ctx.rotate(armSwing*0.6 + (atk ? -1 : 0));
-            if (atk) { ctx.shadowBlur = 20; ctx.shadowColor = kMode ? '#ff3300' : '#4facfe'; }
-            ctx.fillStyle = bodyColor; ctx.fillRect(-4, 0, 8, 22);
-            if (atk) {
-                ctx.fillStyle = kMode ? 'rgba(255,60,0,0.7)' : 'rgba(79,172,254,0.7)';
-                ctx.beginPath(); ctx.arc(0, 22, 8, 0, 7); ctx.fill();
-            }
-            ctx.restore();
 
             ctx.restore();
         }
@@ -703,6 +661,17 @@
             });
             ctx.globalAlpha = 1;
 
+            // Render Sasuke Assist Partner
+            if (player.sasukeTimer > 0) {
+                ctx.save();
+                const sasukeX = player.x + (player.side === 0 ? 70 : -70);
+                ctx.translate(sasukeX + 20, player.y + 30);
+                if (images.sasuke && images.sasuke.complete && images.sasuke.naturalWidth !== 0) {
+                    ctx.drawImage(images.sasuke, -35, -45, 70, 90);
+                }
+                ctx.restore();
+            }
+
             particles.forEach((p, i) => {
                 ctx.globalAlpha = p.life; ctx.fillStyle = p.c;
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, 7); ctx.fill();
@@ -734,50 +703,26 @@
                     ctx.beginPath(); ctx.moveTo(0, 22); ctx.lineTo(0, 3); ctx.stroke();
                 }
                 else if (e.type === 'shinobi') {
-                    const walk = Math.sin(frameCount*0.3 + e.x);
-                    ctx.save(); ctx.translate(-6, 26); ctx.rotate(walk*0.4); ctx.fillStyle = '#111827'; ctx.fillRect(-3, 0, 6, 20); ctx.restore();
-                    ctx.save(); ctx.translate(6, 26); ctx.rotate(-walk*0.4); ctx.fillStyle = '#111827'; ctx.fillRect(-3, 0, 6, 20); ctx.restore();
-                    ctx.fillStyle = '#1e293b'; ctx.fillRect(-15, 0, 30, 30);
-                    ctx.fillStyle = '#fce2c4'; ctx.beginPath(); ctx.arc(0, -5, 12, 0, 7); ctx.fill();
-                    ctx.fillStyle = '#334155'; ctx.fillRect(-14, -12, 28, 6);
+                    if (images.enemyShinobi && images.enemyShinobi.complete && images.enemyShinobi.naturalWidth !== 0) {
+                        ctx.drawImage(images.enemyShinobi, -35, -45, 70, 90);
+                    }
                 }
                 else if (e.type === 'itachi') {
-                    const hem = 6;
-                    if (e.phase === 2) {
-                        ctx.save(); ctx.globalAlpha = 0.35 + Math.sin(frameCount*0.15)*0.1;
-                        ctx.strokeStyle = '#ff2020'; ctx.lineWidth = 3; ctx.shadowBlur = 30; ctx.shadowColor = '#ff0000';
-                        ctx.beginPath();
-                        ctx.moveTo(-70, 120); ctx.lineTo(0, -70); ctx.lineTo(70, 120);
-                        ctx.moveTo(-50, 100); ctx.lineTo(0, -30); ctx.lineTo(50, 100);
-                        ctx.stroke(); ctx.restore();
-                    }
                     if (e.telegraph) {
                         ctx.save(); ctx.globalAlpha = 0.5 + Math.sin(frameCount*0.6)*0.3;
                         ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
-                        ctx.beginPath(); ctx.arc(0, 18, 40, 0, 7); ctx.stroke(); ctx.restore();
+                        ctx.beginPath(); ctx.arc(0, 0, 45, 0, 7); ctx.stroke(); ctx.restore();
                     }
-                    ctx.shadowBlur = 25; ctx.shadowColor = '#f00';
-                    // cloak with wavy hem
-                    ctx.fillStyle = '#000';
-                    ctx.beginPath(); ctx.moveTo(-30, 90); ctx.lineTo(0, 0); ctx.lineTo(30, 90);
-                    for (let x = 30; x >= -30; x -= 10) {
-                        const wob = Math.sin(frameCount*0.1 + x*0.3) * hem;
-                        ctx.lineTo(x, 90 + wob);
+                    const itachiImg = (e.phase === 2 || e.telegraph) ? images.itachiAttack : images.itachiBase;
+                    if (itachiImg && itachiImg.complete && itachiImg.naturalWidth !== 0) {
+                        ctx.drawImage(itachiImg, -45, -50, 90, 100);
                     }
-                    ctx.closePath(); ctx.fill();
-                    ctx.fillStyle = '#fce2c4'; ctx.beginPath(); ctx.arc(0, 18, 12, 0, 7); ctx.fill();
-                    ctx.fillStyle = '#7f1d1d'; ctx.fillRect(-8, 8, 16, 5);
-                    // glowing eyes
-                    ctx.save();
-                    ctx.globalAlpha = 0.7 + Math.sin(frameCount*0.2)*0.3;
-                    ctx.fillStyle = '#ff0000'; ctx.shadowBlur = 10; ctx.shadowColor = '#ff0000';
-                    ctx.beginPath(); ctx.arc(-4, 16, 1.8, 0, 7); ctx.arc(4, 16, 1.8, 0, 7); ctx.fill();
-                    ctx.restore();
-                    ctx.fillStyle = '#222'; ctx.fillRect(-50, -60, 100, 8);
-                    ctx.fillStyle = '#ff0000'; ctx.fillRect(-50, -60, (e.hp/e.maxHp)*100, 8);
+                    
+                    // Boss HP bar
+                    ctx.fillStyle = '#222'; ctx.fillRect(-50, -65, 100, 8);
+                    ctx.fillStyle = '#ff0000'; ctx.fillRect(-50, -65, (e.hp/e.maxHp)*100, 8);
                     ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
-                    for (let n=1;n<4;n++) { ctx.beginPath(); ctx.moveTo(-50+n*25, -60); ctx.lineTo(-50+n*25, -52); ctx.stroke(); }
-                    ctx.shadowBlur = 0;
+                    for (let n=1; n<4; n++) { ctx.beginPath(); ctx.moveTo(-50+n*25, -65); ctx.lineTo(-50+n*25, -57); ctx.stroke(); }
                 }
                 else if (e.type === 'rasenshuriken') { ctx.rotate(frameCount*0.6); ctx.fillStyle = '#4facfe'; ctx.shadowBlur = 15; ctx.shadowColor = '#4facfe'; for(let i=0; i<4; i++) { ctx.rotate(Math.PI/2); ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,30,0,1.2); ctx.fill(); } }
                 else if (e.type === 'beast_bomb') { ctx.shadowBlur = 30; ctx.shadowColor = '#f00'; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, 35, 0, 7); ctx.fill(); ctx.strokeStyle = '#f00'; ctx.lineWidth = 4; ctx.stroke(); }
