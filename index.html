@@ -113,9 +113,9 @@
         // (e.g. narutoRun.png is really a single static image, not 4 frames),
         // just change the number here — nothing else needs to change.
         const spriteFrames = {
-            narutoRun: 1,   // single static image, not a sprite sheet
-            kuramaRun: 4,   // this one IS a 4-frame sheet (confirmed working)
-            narutoJutsu: 1,
+            narutoRun: 4,   // confirmed: genuine 4-frame sheet, evenly spaced
+            kuramaRun: 4,
+            narutoJutsu: 1, // confirmed: single pose on an oversized padded canvas
             kuramaJutsu: 1
         };
 
@@ -132,16 +132,22 @@
             images[key].onload = () => {
                 imageStatus[key] = 'ok';
                 imagesLoaded++;
+                const frames = spriteFrames[key] || 1;
                 // Sanity check: warn if a "multi-frame" sheet's width isn't evenly
                 // divisible by its declared frame count — a strong sign the frame
                 // count is wrong and slicing will look broken.
-                const frames = spriteFrames[key] || 1;
                 if (frames > 1 && images[key].naturalWidth % frames !== 0) {
                     console.warn(
                         `[sprite warning] ${key} (${imageSources[key]}) is ${images[key].naturalWidth}px wide ` +
                         `but declared as ${frames} frames — width isn't evenly divisible. ` +
                         `Check spriteFrames["${key}"] in the code.`
                     );
+                }
+                // For single-frame images, auto-trim transparent padding so the
+                // character isn't drawn tiny inside an oversized canvas.
+                if (frames === 1) {
+                    const box = computeBBox(images[key]);
+                    if (box) imageBBox[key] = box;
                 }
             };
             images[key].onerror = () => {
@@ -156,6 +162,53 @@
         function imgReady(key) {
             const img = images[key];
             return img && img.complete && img.naturalWidth !== 0 && imageStatus[key] === 'ok';
+        }
+
+        // Some source PNGs are exported on an oversized canvas with a lot of
+        // transparent padding around the actual character (e.g. narutoJutsu.png
+        // is 677x369 but the character only occupies a 234x328 region in the
+        // middle). Drawing the whole padded canvas squished into a small box
+        // makes the character look tiny/off — so for single-frame images we
+        // detect the real content box once on load and crop to it when drawing.
+        const imageBBox = {};
+        function computeBBox(img) {
+            const c = document.createElement('canvas');
+            c.width = img.naturalWidth; c.height = img.naturalHeight;
+            const cctx = c.getContext('2d');
+            cctx.drawImage(img, 0, 0);
+            let data;
+            try {
+                data = cctx.getImageData(0, 0, c.width, c.height).data;
+            } catch (err) {
+                return null; // e.g. tainted canvas if loaded cross-origin
+            }
+            let minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+            for (let y = 0; y < c.height; y++) {
+                for (let x = 0; x < c.width; x++) {
+                    if (data[(y * c.width + x) * 4 + 3] > 10) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+            if (maxX < minX || maxY < minY) return null;
+            return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+        }
+        // Draws an image, auto-cropped to its trimmed content box, fit into (dx,dy,dw,dh)
+        // while preserving the character's aspect ratio and staying centered/bottom-anchored.
+        function drawTrimmed(img, key, dx, dy, dw, dh) {
+            const box = imageBBox[key];
+            const sx = box ? box.x : 0, sy = box ? box.y : 0;
+            const sw = box ? box.w : img.naturalWidth, sh = box ? box.h : img.naturalHeight;
+            // Fit the source box into the destination box preserving aspect ratio
+            const srcRatio = sw / sh, dstRatio = dw / dh;
+            let fw, fh;
+            if (srcRatio > dstRatio) { fw = dw; fh = dw / srcRatio; } else { fh = dh; fw = dh * srcRatio; }
+            const fx = dx + (dw - fw) / 2;
+            const fy = dy + (dh - fh); // anchor to bottom (feet on the ground)
+            ctx.drawImage(img, sx, sy, sw, sh, fx, fy, fw, fh);
         }
 
         // ============================================================
@@ -662,7 +715,7 @@
                             -45, -55, 90, 110
                         );
                     } else {
-                        ctx.drawImage(img, -45, -55, 90, 110);
+                        drawTrimmed(img, jutsuKey, -45, -55, 90, 110);
                     }
                 } else {
                     // Fallback visual if jutsu image hasn't loaded / failed to load
