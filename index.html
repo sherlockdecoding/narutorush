@@ -35,6 +35,7 @@
         #low-hp-pulse { position:absolute; inset:0; pointer-events:none; z-index:41; box-shadow: inset 0 0 100px 20px rgba(255,0,0,0); transition: box-shadow 0.3s; }
         @keyframes overlayIn { from { opacity:0; transform: scale(0.96); } to { opacity:1; transform: scale(1); } }
         #overlay.show-anim { animation: overlayIn 0.4s ease-out; }
+        #debug-panel { position: absolute; bottom: 4px; left: 4px; z-index: 999; font-family: monospace; font-size: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 4px 6px; border-radius: 4px; pointer-events: none; white-space: pre; display: none; }
     </style>
 </head>
 <body>
@@ -62,6 +63,7 @@
 
     <div id="vignette"></div>
     <div id="low-hp-pulse"></div>
+    <div id="debug-panel"></div>
 
     <div id="controls">
         <div id="btn-dash" class="ctrl-btn">
@@ -85,7 +87,9 @@
     <canvas id="game"></canvas>
 
     <script>
-        // Preload & setup image objects
+        // ============================================================
+        // IMAGE LOADING
+        // ============================================================
         const images = {};
         const imageSources = {
             narutoRun: '1000022151.png',
@@ -98,14 +102,65 @@
             itachiAttack: '1000022176.png'
         };
 
+        // Explicit frame counts for sprite sheets. FIX: the previous code guessed
+        // whether an image was a multi-frame sheet by comparing width to height
+        // (width > height * 1.5). That heuristic silently failed for the Naruto
+        // run/jutsu sheets (their aspect ratio didn't clear the threshold), which
+        // is why they rendered squished or blank while Kurama's sheets (which
+        // happened to pass the check) looked fine.
+        //
+        // If your actual PNGs use a different layout than assumed below
+        // (e.g. narutoRun.png is really a single static image, not 4 frames),
+        // just change the number here — nothing else needs to change.
+        const spriteFrames = {
+            narutoRun: 4,
+            kuramaRun: 4,
+            narutoJutsu: 1,
+            kuramaJutsu: 1
+        };
+
+        // Track per-image load state explicitly instead of just counting successes.
+        // This lets us tell the difference between "still loading" and "404/broken".
+        const imageStatus = {};
         let imagesLoaded = 0;
+        let imagesFailed = 0;
         const totalImages = Object.keys(imageSources).length;
+
         for (let key in imageSources) {
             images[key] = new Image();
+            imageStatus[key] = 'loading';
+            images[key].onload = () => {
+                imageStatus[key] = 'ok';
+                imagesLoaded++;
+                // Sanity check: warn if a "multi-frame" sheet's width isn't evenly
+                // divisible by its declared frame count — a strong sign the frame
+                // count is wrong and slicing will look broken.
+                const frames = spriteFrames[key] || 1;
+                if (frames > 1 && images[key].naturalWidth % frames !== 0) {
+                    console.warn(
+                        `[sprite warning] ${key} (${imageSources[key]}) is ${images[key].naturalWidth}px wide ` +
+                        `but declared as ${frames} frames — width isn't evenly divisible. ` +
+                        `Check spriteFrames["${key}"] in the code.`
+                    );
+                }
+            };
+            images[key].onerror = () => {
+                imageStatus[key] = 'error';
+                imagesFailed++;
+                console.error(`[image error] Failed to load "${key}" from "${imageSources[key]}". ` +
+                    `Check that this file exists in the same folder as the HTML file and the filename matches exactly (case-sensitive).`);
+            };
             images[key].src = imageSources[key];
-            images[key].onload = () => { imagesLoaded++; };
         }
 
+        function imgReady(key) {
+            const img = images[key];
+            return img && img.complete && img.naturalWidth !== 0 && imageStatus[key] === 'ok';
+        }
+
+        // ============================================================
+        // AUDIO
+        // ============================================================
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioCtx();
         let musicPlaying = false;
@@ -270,6 +325,9 @@
             }
         };
 
+        // ============================================================
+        // CORE STATE
+        // ============================================================
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
         const hpFill = document.getElementById('hp-fill');
@@ -283,6 +341,11 @@
         const statsBox = document.getElementById('stats-box');
         const bestTxt = document.getElementById('best-txt');
         const lowHpPulse = document.getElementById('low-hp-pulse');
+        const debugPanel = document.getElementById('debug-panel');
+
+        // Set ?debug=1 in the URL to see live image-load status on screen.
+        const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
+        if (DEBUG) debugPanel.style.display = 'block';
 
         const V_WIDTH = 400;
         let V_HEIGHT = 800;
@@ -294,7 +357,7 @@
             x: 60, y: 0, targetX: 60, side: 0, hp: 100,
             kuramaMode: 0, kuramaMax: 400, sasukeTimer: 0, trail: [],
             width: 40, height: 60, finisher: false, finisherX: 0, finisherY: 0, defaultY: 0,
-            chakra: 100, chakraMax: 100, attackAnim: 0
+            chakra: 100, chakraMax: 100, attackAnim: 0, attackAnimMax: 12
         };
 
         let entities = [];
@@ -363,6 +426,10 @@
             punch = 0; hitStop = 0; jutsuFlash = 0;
             overlay.style.display = 'none';
             document.body.classList.remove('flash-red');
+            // FIX: chakra bar previously stayed visually empty at game start
+            // because its width was never set to match player.chakra (100).
+            chakraFill.style.width = player.chakra + '%';
+            document.getElementById('btn-attack').classList.remove('depleted');
             phaseLabel.innerText = "Infiltration";
             comboTxt.style.opacity = '0';
             scoreTxt.innerText = '0';
@@ -499,6 +566,14 @@
             distTxt.innerText = Math.floor(distance);
             if (frameCount % 30 === 0) addScore(1);
             if (player.hp <= 0) gameOver();
+
+            if (DEBUG && frameCount % 15 === 0) {
+                let lines = [`frame ${frameCount}  loaded ${imagesLoaded}/${totalImages}  failed ${imagesFailed}`];
+                for (let k in imageSources) {
+                    lines.push(`${k}: ${imageStatus[k]}${imgReady(k) ? ' ' + images[k].naturalWidth + 'x' + images[k].naturalHeight : ''}`);
+                }
+                debugPanel.innerText = lines.join('\n');
+            }
         }
 
         function startFinisher(target) {
@@ -550,6 +625,9 @@
             Sfx.hit();
         }
 
+        // ============================================================
+        // RENDERING
+        // ============================================================
         function drawPlayer(kMode) {
             const lean = Math.max(-10, Math.min(10, (player.targetX - player.x) * 0.28));
             const isAttacking = player.attackAnim > 0 || player.finisher;
@@ -566,21 +644,39 @@
             }
 
             if (isAttacking) {
-                const img = kMode ? images.kuramaJutsu : images.narutoJutsu;
-                if (img && img.complete && img.naturalWidth !== 0) {
-                    ctx.drawImage(img, -45, -55, 90, 110);
+                // FIX: use explicit sprite key + spriteFrames instead of the old
+                // aspect-ratio guess, and slice the jutsu sheet into frames too
+                // (previously it always drew the whole sheet as one static image).
+                const jutsuKey = kMode ? 'kuramaJutsu' : 'narutoJutsu';
+                if (imgReady(jutsuKey)) {
+                    const img = images[jutsuKey];
+                    const frames = spriteFrames[jutsuKey] || 1;
+                    if (frames > 1) {
+                        const progress = 1 - (player.attackAnim / player.attackAnimMax); // 0 -> 1 over the swing
+                        const frameIndex = Math.min(frames - 1, Math.floor(progress * frames));
+                        const frameWidth = img.naturalWidth / frames;
+                        const frameHeight = img.naturalHeight;
+                        ctx.drawImage(
+                            img,
+                            frameIndex * frameWidth, 0, frameWidth, frameHeight,
+                            -45, -55, 90, 110
+                        );
+                    } else {
+                        ctx.drawImage(img, -45, -55, 90, 110);
+                    }
                 } else {
-                    // Fallback visual if jutsu image hasn't loaded
+                    // Fallback visual if jutsu image hasn't loaded / failed to load
                     ctx.fillStyle = kMode ? '#ff3300' : '#4facfe';
                     ctx.beginPath(); ctx.arc(0, 0, 35, 0, 7); ctx.fill();
                 }
             } else {
-                const sheet = kMode ? images.kuramaRun : images.narutoRun;
-                if (sheet && sheet.complete && sheet.naturalWidth !== 0) {
-                    // Check if image is wider than high (likely a multi-frame sprite sheet)
-                    if (sheet.naturalWidth > sheet.naturalHeight * 1.5) {
-                        const frameIndex = Math.floor(frameCount / 6) % 4;
-                        const frameWidth = sheet.naturalWidth / 4;
+                const sheetKey = kMode ? 'kuramaRun' : 'narutoRun';
+                if (imgReady(sheetKey)) {
+                    const sheet = images[sheetKey];
+                    const frames = spriteFrames[sheetKey] || 1;
+                    if (frames > 1) {
+                        const frameIndex = Math.floor(frameCount / 6) % frames;
+                        const frameWidth = sheet.naturalWidth / frames;
                         const frameHeight = sheet.naturalHeight;
                         ctx.drawImage(
                             sheet,
@@ -588,11 +684,10 @@
                             -35, -45, 70, 90
                         );
                     } else {
-                        // Render full image cleanly if it's a single sprite
                         ctx.drawImage(sheet, -35, -45, 70, 90);
                     }
                 } else {
-                    // Fallback visual if run image hasn't loaded
+                    // Fallback visual if run image hasn't loaded / failed to load
                     ctx.fillStyle = kMode ? '#ff8000' : '#f97316';
                     ctx.fillRect(-20, -30, 40, 60);
                 }
@@ -680,8 +775,10 @@
                 ctx.save();
                 const sasukeX = player.x + (player.side === 0 ? 70 : -70);
                 ctx.translate(sasukeX + 20, player.y + 30);
-                if (images.sasuke && images.sasuke.complete && images.sasuke.naturalWidth !== 0) {
+                if (imgReady('sasuke')) {
                     ctx.drawImage(images.sasuke, -35, -45, 70, 90);
+                } else {
+                    ctx.fillStyle = '#38bdf8'; ctx.fillRect(-20, -30, 40, 60);
                 }
                 ctx.restore();
             }
@@ -717,8 +814,10 @@
                     ctx.beginPath(); ctx.moveTo(0, 22); ctx.lineTo(0, 3); ctx.stroke();
                 }
                 else if (e.type === 'shinobi') {
-                    if (images.enemyShinobi && images.enemyShinobi.complete && images.enemyShinobi.naturalWidth !== 0) {
+                    if (imgReady('enemyShinobi')) {
                         ctx.drawImage(images.enemyShinobi, -35, -45, 70, 90);
+                    } else {
+                        ctx.fillStyle = '#64748b'; ctx.fillRect(-20, -30, 40, 60);
                     }
                 }
                 else if (e.type === 'itachi') {
@@ -727,11 +826,13 @@
                         ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
                         ctx.beginPath(); ctx.arc(0, 0, 45, 0, 7); ctx.stroke(); ctx.restore();
                     }
-                    const itachiImg = (e.phase === 2 || e.telegraph) ? images.itachiAttack : images.itachiBase;
-                    if (itachiImg && itachiImg.complete && itachiImg.naturalWidth !== 0) {
-                        ctx.drawImage(itachiImg, -45, -50, 90, 100);
+                    const itachiKey = (e.phase === 2 || e.telegraph) ? 'itachiAttack' : 'itachiBase';
+                    if (imgReady(itachiKey)) {
+                        ctx.drawImage(images[itachiKey], -45, -50, 90, 100);
+                    } else {
+                        ctx.fillStyle = '#7f1d1d'; ctx.fillRect(-25, -40, 50, 80);
                     }
-                    
+
                     // Boss HP bar
                     ctx.fillStyle = '#222'; ctx.fillRect(-50, -65, 100, 8);
                     ctx.fillStyle = '#ff0000'; ctx.fillRect(-50, -65, (e.hp/e.maxHp)*100, 8);
@@ -770,6 +871,9 @@
             requestAnimationFrame(draw);
         }
 
+        // ============================================================
+        // INPUT
+        // ============================================================
         function handleAttack() {
             if (state !== 'PLAY' || player.finisher) return;
             if (player.chakra < 20 && player.kuramaMode <= 0) { Sfx.deny(); return; }
@@ -777,7 +881,7 @@
             if (player.kuramaMode <= 0) { player.chakra -= 20; chakraFill.style.width = player.chakra + '%'; }
             entities.push({ type, x: player.x + 20, y: player.y });
             spawnPart(player.x + 20, player.y, player.kuramaMode > 0 ? '#f00' : '#4facfe', 15);
-            player.attackAnim = 12;
+            player.attackAnim = player.attackAnimMax;
             jutsuFlash = 1;
             Sfx.jutsu(player.kuramaMode > 0);
         }
