@@ -569,18 +569,32 @@
                 const img = kMode ? images.kuramaJutsu : images.narutoJutsu;
                 if (img && img.complete && img.naturalWidth !== 0) {
                     ctx.drawImage(img, -45, -55, 90, 110);
+                } else {
+                    // Fallback visual if jutsu image hasn't loaded
+                    ctx.fillStyle = kMode ? '#ff3300' : '#4facfe';
+                    ctx.beginPath(); ctx.arc(0, 0, 35, 0, 7); ctx.fill();
                 }
             } else {
                 const sheet = kMode ? images.kuramaRun : images.narutoRun;
                 if (sheet && sheet.complete && sheet.naturalWidth !== 0) {
-                    const frameIndex = Math.floor(frameCount / 6) % 4;
-                    const frameWidth = sheet.naturalWidth / 4;
-                    const frameHeight = sheet.naturalHeight;
-                    ctx.drawImage(
-                        sheet,
-                        frameIndex * frameWidth, 0, frameWidth, frameHeight,
-                        -35, -45, 70, 90
-                    );
+                    // Check if image is wider than high (likely a multi-frame sprite sheet)
+                    if (sheet.naturalWidth > sheet.naturalHeight * 1.5) {
+                        const frameIndex = Math.floor(frameCount / 6) % 4;
+                        const frameWidth = sheet.naturalWidth / 4;
+                        const frameHeight = sheet.naturalHeight;
+                        ctx.drawImage(
+                            sheet,
+                            frameIndex * frameWidth, 0, frameWidth, frameHeight,
+                            -35, -45, 70, 90
+                        );
+                    } else {
+                        // Render full image cleanly if it's a single sprite
+                        ctx.drawImage(sheet, -35, -45, 70, 90);
+                    }
+                } else {
+                    // Fallback visual if run image hasn't loaded
+                    ctx.fillStyle = kMode ? '#ff8000' : '#f97316';
+                    ctx.fillRect(-20, -30, 40, 60);
                 }
             }
 
