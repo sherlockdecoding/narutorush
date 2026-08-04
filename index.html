@@ -181,7 +181,13 @@
             try {
                 data = cctx.getImageData(0, 0, c.width, c.height).data;
             } catch (err) {
-                return null; // e.g. tainted canvas if loaded cross-origin
+                // FIX: this previously failed silently, so opening the game via
+                // file:// (tainted canvas, no CORS) would silently fall back to
+                // drawing the untrimmed padded image — the exact "tiny/off"
+                // look this trimming code exists to prevent, with zero signal
+                // in the console to explain why. Now it's logged clearly.
+                console.warn(`[sprite trim] Could not read pixel data for bbox crop (likely opened via file:// — serve over http instead). Falling back to untrimmed image.`, err);
+                return null;
             }
             let minX = c.width, minY = c.height, maxX = -1, maxY = -1;
             for (let y = 0; y < c.height; y++) {
@@ -559,7 +565,19 @@
                 let e = entities[i];
                 if (['ramen', 'scroll', 'bandage'].includes(e.type)) {
                     const dx = (player.x + 20) - e.x, dy = (player.y + 30) - e.y;
-                    if (Math.sqrt(dx*dx + dy*dy) < 150) { e.x += dx * 0.15; e.y += dy * 0.15; }
+                    // FIX: pickups previously ALSO fell via the unconditional
+                    // "else { e.y += 12 }" below, every frame, even while being
+                    // magnet-pulled toward the player. That constant downward fall
+                    // fought the magnet pull and the two forces settled into a
+                    // stable equilibrium roughly 80px below the player's collection
+                    // point — the item never actually reached the <45px pickup
+                    // radius. It just followed the player's x-position forever,
+                    // looking like a "dragged" leftover item for the rest of the run.
+                    // e.magnetized now suppresses the generic fall once the item is
+                    // close enough to be pulled in, so it converges cleanly onto the
+                    // player and actually gets collected.
+                    if (Math.sqrt(dx*dx + dy*dy) < 150) { e.x += dx * 0.15; e.y += dy * 0.15; e.magnetized = true; }
+                    else { e.magnetized = false; }
                 }
                 if (['rasenshuriken', 'beast_bomb', 'chidori_senbon'].includes(e.type)) {
                     e.y -= 25;
@@ -568,14 +586,27 @@
                     if (frameCount % 60 === 0) e.targetX = 100 + Math.random() * 200;
                     e.x += (e.targetX - e.x) * 0.08;
                     const rate = e.fireRate;
-                    const untilFire = rate - (frameCount % rate);
+                    // FIX: at the exact fire frame (frameCount % rate === 0),
+                    // untilFire evaluated to `rate` itself (not 0), so the telegraph
+                    // briefly read false right as Itachi fired — a one-frame flicker
+                    // back to the base (non-attack) sprite mid-attack. Wrapping with
+                    // % rate makes the fire frame correctly read as 0, staying inside
+                    // the <=15 telegraph window.
+                    const untilFire = (rate - (frameCount % rate)) % rate;
                     e.telegraph = untilFire <= 15;
                     if (e.telegraph && untilFire === 15) Sfx.telegraph();
                     if (frameCount % rate === 0) {
-                        const count = e.phase === 2 ? 6 : (e.hp < 150 ? 5 : 3);
+                        // FIX: phase flips to 2 the same frame hp first drops <=150,
+                        // so "e.hp < 150 ? 5 : 3" was unreachable — phase===2 always
+                        // matched first, skipping the mid-fight 5-kunai tier entirely.
+                        // Now scaled by remaining HP fraction so the ramp actually
+                        // plays out: 3 kunai above 75% HP, 5 between 75% and phase 2,
+                        // 6 once Mangekyō triggers.
+                        const hpFrac = e.hp / e.maxHp;
+                        const count = e.phase === 2 ? 6 : (hpFrac < 0.75 ? 5 : 3);
                         for(let k=0; k<count; k++) entities.push({ type: 'kunai', x: e.x + (k - Math.floor(count/2))*40, y: e.y + 30 });
                     }
-                } else { e.y += 12; }
+                } else if (!e.magnetized) { e.y += 12; }
 
                 const pdx = (player.x + 20) - e.x, pdy = (player.y + 30) - e.y;
                 if (Math.sqrt(pdx*pdx + pdy*pdy) < 45) {
