@@ -681,6 +681,18 @@
         // ============================================================
         // RENDERING
         // ============================================================
+        // Character draw sizes — bumped up from the originals (70x90 / 90x110 / etc.)
+        // for better visual presence. All are (width, height) with the origin at
+        // the character's translate point (feet-ish center), matching how each
+        // draw call below positions them (-w/2, -h*ratio, w, h).
+        const SIZE = {
+            playerRun:   { w: 96,  h: 124 },
+            playerJutsu: { w: 140, h: 172 },
+            enemy:       { w: 88,  h: 114 },
+            sasuke:      { w: 88,  h: 114 },
+            itachi:      { w: 112, h: 128 }
+        };
+
         function drawPlayer(kMode) {
             const lean = Math.max(-10, Math.min(10, (player.targetX - player.x) * 0.28));
             const isAttacking = player.attackAnim > 0 || player.finisher;
@@ -704,6 +716,7 @@
                 if (imgReady(jutsuKey)) {
                     const img = images[jutsuKey];
                     const frames = spriteFrames[jutsuKey] || 1;
+                    const jw = SIZE.playerJutsu.w, jh = SIZE.playerJutsu.h;
                     if (frames > 1) {
                         const progress = 1 - (player.attackAnim / player.attackAnimMax); // 0 -> 1 over the swing
                         const frameIndex = Math.min(frames - 1, Math.floor(progress * frames));
@@ -712,10 +725,10 @@
                         ctx.drawImage(
                             img,
                             frameIndex * frameWidth, 0, frameWidth, frameHeight,
-                            -45, -55, 90, 110
+                            -jw / 2, -jh * 0.62, jw, jh
                         );
                     } else {
-                        drawTrimmed(img, jutsuKey, -45, -55, 90, 110);
+                        drawTrimmed(img, jutsuKey, -jw / 2, -jh * 0.62, jw, jh);
                     }
                 } else {
                     // Fallback visual if jutsu image hasn't loaded / failed to load
@@ -727,6 +740,7 @@
                 if (imgReady(sheetKey)) {
                     const sheet = images[sheetKey];
                     const frames = spriteFrames[sheetKey] || 1;
+                    const rw = SIZE.playerRun.w, rh = SIZE.playerRun.h;
                     if (frames > 1) {
                         const frameIndex = Math.floor(frameCount / 6) % frames;
                         const frameWidth = sheet.naturalWidth / frames;
@@ -734,15 +748,15 @@
                         ctx.drawImage(
                             sheet,
                             frameIndex * frameWidth, 0, frameWidth, frameHeight,
-                            -35, -45, 70, 90
+                            -rw / 2, -rh * 0.5, rw, rh
                         );
                     } else {
-                        ctx.drawImage(sheet, -35, -45, 70, 90);
+                        ctx.drawImage(sheet, -rw / 2, -rh * 0.5, rw, rh);
                     }
                 } else {
                     // Fallback visual if run image hasn't loaded / failed to load
                     ctx.fillStyle = kMode ? '#ff8000' : '#f97316';
-                    ctx.fillRect(-20, -30, 40, 60);
+                    ctx.fillRect(-SIZE.playerRun.w * 0.29, -SIZE.playerRun.h * 0.33, SIZE.playerRun.w * 0.58, SIZE.playerRun.h * 0.67);
                 }
             }
 
@@ -829,9 +843,9 @@
                 const sasukeX = player.x + (player.side === 0 ? 70 : -70);
                 ctx.translate(sasukeX + 20, player.y + 30);
                 if (imgReady('sasuke')) {
-                    ctx.drawImage(images.sasuke, -35, -45, 70, 90);
+                    ctx.drawImage(images.sasuke, -SIZE.sasuke.w / 2, -SIZE.sasuke.h * 0.5, SIZE.sasuke.w, SIZE.sasuke.h);
                 } else {
-                    ctx.fillStyle = '#38bdf8'; ctx.fillRect(-20, -30, 40, 60);
+                    ctx.fillStyle = '#38bdf8'; ctx.fillRect(-SIZE.sasuke.w * 0.29, -SIZE.sasuke.h * 0.33, SIZE.sasuke.w * 0.58, SIZE.sasuke.h * 0.67);
                 }
                 ctx.restore();
             }
@@ -868,9 +882,9 @@
                 }
                 else if (e.type === 'shinobi') {
                     if (imgReady('enemyShinobi')) {
-                        ctx.drawImage(images.enemyShinobi, -35, -45, 70, 90);
+                        ctx.drawImage(images.enemyShinobi, -SIZE.enemy.w / 2, -SIZE.enemy.h * 0.5, SIZE.enemy.w, SIZE.enemy.h);
                     } else {
-                        ctx.fillStyle = '#64748b'; ctx.fillRect(-20, -30, 40, 60);
+                        ctx.fillStyle = '#64748b'; ctx.fillRect(-SIZE.enemy.w * 0.29, -SIZE.enemy.h * 0.33, SIZE.enemy.w * 0.58, SIZE.enemy.h * 0.67);
                     }
                 }
                 else if (e.type === 'itachi') {
@@ -881,9 +895,9 @@
                     }
                     const itachiKey = (e.phase === 2 || e.telegraph) ? 'itachiAttack' : 'itachiBase';
                     if (imgReady(itachiKey)) {
-                        ctx.drawImage(images[itachiKey], -45, -50, 90, 100);
+                        ctx.drawImage(images[itachiKey], -SIZE.itachi.w / 2, -SIZE.itachi.h * 0.55, SIZE.itachi.w, SIZE.itachi.h);
                     } else {
-                        ctx.fillStyle = '#7f1d1d'; ctx.fillRect(-25, -40, 50, 80);
+                        ctx.fillStyle = '#7f1d1d'; ctx.fillRect(-SIZE.itachi.w * 0.28, -SIZE.itachi.h * 0.4, SIZE.itachi.w * 0.56, SIZE.itachi.h * 0.8);
                     }
 
                     // Boss HP bar
@@ -902,11 +916,27 @@
             });
 
             if (!player.finisher) {
-                player.trail.forEach((t, i) => {
-                    ctx.globalAlpha = i * 0.07;
-                    ctx.fillStyle = kMode ? '#f00' : '#f97316';
-                    ctx.fillRect(t.x, t.y + 20, 40, 50);
-                });
+                const trailSheetKey = kMode ? 'kuramaRun' : 'narutoRun';
+                const rw = SIZE.playerRun.w, rh = SIZE.playerRun.h;
+                if (imgReady(trailSheetKey)) {
+                    const sheet = images[trailSheetKey];
+                    const frames = spriteFrames[trailSheetKey] || 1;
+                    const frameIndex = Math.floor(frameCount / 6) % frames;
+                    const frameWidth = sheet.naturalWidth / frames;
+                    const frameHeight = sheet.naturalHeight;
+                    player.trail.forEach((t, i) => {
+                        const alpha = i * 0.05;
+                        if (alpha <= 0) return;
+                        ctx.save();
+                        ctx.globalAlpha = alpha;
+                        ctx.drawImage(
+                            sheet,
+                            frameIndex * frameWidth, 0, frameWidth, frameHeight,
+                            t.x + 20 - rw / 2, t.y + 30 - rh * 0.5, rw, rh
+                        );
+                        ctx.restore();
+                    });
+                }
                 ctx.globalAlpha = 1;
             }
             drawPlayer(kMode);
