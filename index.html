@@ -235,66 +235,38 @@
         let musicInterval;
         let bossMode = false;
 
+        // Background music now plays an actual audio file instead of the
+        // procedurally-generated synth loop. Keep same file next to index.html.
+        const bgMusic = new Audio('Narutomusic.mp3');
+        bgMusic.loop = true;
+        bgMusic.volume = 0.5;
+        bgMusic.addEventListener('error', () => {
+            console.error(
+                '[music] Failed to load "Narutomusic.mp3". Make sure the file is uploaded ' +
+                'to the same folder as index.html and the filename matches exactly (case-sensitive).'
+            );
+        });
+
         const Music = {
-            notes: [220, 247, 261, 330, 349],
-            bossNotes: [196, 220, 233, 293, 311],
-            step: 0,
-            playTick: function() {
-                const now = audioCtx.currentTime;
-                const scaleN = bossMode ? this.bossNotes : this.notes;
-                if (this.step % 2 === 0) {
-                    const osc = audioCtx.createOscillator();
-                    const g = audioCtx.createGain();
-                    osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(bossMode ? 46 : 55, now);
-                    g.gain.setValueAtTime(bossMode ? 0.22 : 0.15, now);
-                    g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                    osc.connect(g); g.connect(audioCtx.destination);
-                    osc.start(); osc.stop(now + 0.2);
-                }
-                if (this.step % 4 === 2) {
-                    const noise = audioCtx.createBufferSource();
-                    const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
-                    const data = buffer.getChannelData(0);
-                    for(let i=0; i<data.length; i++) data[i] = Math.random() * 2 - 1;
-                    noise.buffer = buffer;
-                    const g = audioCtx.createGain();
-                    g.gain.setValueAtTime(0.05, now);
-                    g.gain.linearRampToValueAtTime(0, now + 0.05);
-                    noise.connect(g); g.connect(audioCtx.destination);
-                    noise.start();
-                }
-                const melodyPattern = [0, 2, 3, 2, 4, 3, 2, 0];
-                const noteIdx = melodyPattern[this.step % 8];
-                const freq = scaleN[noteIdx] * (this.step % 16 > 8 ? 2 : 1);
-                const osc = audioCtx.createOscillator();
-                const g = audioCtx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(freq, now);
-                const lfo = audioCtx.createOscillator();
-                lfo.frequency.value = bossMode ? 8 : 5;
-                const lfoGain = audioCtx.createGain();
-                lfoGain.gain.value = bossMode ? 16 : 10;
-                lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
-                lfo.start();
-                g.gain.setValueAtTime(0.04, now);
-                g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-                osc.connect(g); g.connect(audioCtx.destination);
-                osc.start(); osc.stop(now + 0.4);
-                lfo.stop(now + 0.4);
-                this.step++;
-            },
             start: function() {
-                if(musicPlaying) return;
-                musicPlaying = true; this.step = 0;
-                musicInterval = setInterval(() => this.playTick(), bossMode ? 168 : 214);
+                if (musicPlaying) return;
+                musicPlaying = true;
+                bgMusic.currentTime = 0;
+                bgMusic.playbackRate = 1;
+                // play() must be called from a user-gesture context (e.g. the
+                // START MISSION button handler) or mobile browsers will block it.
+                bgMusic.play().catch(err => console.warn('[music] play() blocked or failed:', err));
             },
             retune: function() {
                 if (!musicPlaying) return;
-                clearInterval(musicInterval);
-                musicInterval = setInterval(() => this.playTick(), bossMode ? 168 : 214);
+                // Speed up slightly during the boss fight for extra tension,
+                // instead of switching to a different track.
+                bgMusic.playbackRate = bossMode ? 1.12 : 1;
             },
-            stop: function() { musicPlaying = false; clearInterval(musicInterval); }
+            stop: function() {
+                musicPlaying = false;
+                bgMusic.pause();
+            }
         };
 
         const Sfx = {
