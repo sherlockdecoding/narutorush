@@ -143,12 +143,13 @@
                         `Check spriteFrames["${key}"] in the code.`
                     );
                 }
-                // For single-frame images, auto-trim transparent padding so the
-                // character isn't drawn tiny inside an oversized canvas.
-                if (frames === 1) {
-                    const box = computeBBox(images[key]);
-                    if (box) imageBBox[key] = box;
-                }
+                // Auto-trim transparent padding so characters aren't drawn small
+                // inside an oversized canvas. For single-frame images this crops
+                // tightly to content. For multi-frame sheets (frames laid out
+                // side-by-side), only the vertical range is reliable to reuse
+                // across all frames — horizontal cropping stays per-frame slicing.
+                const box = computeBBox(images[key]);
+                if (box) imageBBox[key] = box;
             };
             images[key].onerror = () => {
                 imageStatus[key] = 'error';
@@ -210,6 +211,14 @@
         }
         // Draws an image, auto-cropped to its trimmed content box (removing transparent
         // padding), fit into (dx,dy,dw,dh) preserving aspect ratio.
+        // For a sprite-sheet frame, keep the per-frame horizontal slice but reuse
+        // the whole-sheet's vertical content bounds (imageBBox) to trim shared
+        // top/bottom padding — this is what makes a run-sheet frame fill its box
+        // as fully as a single trimmed image like Sasuke's.
+        function frameSourceRect(key, frameIndex, frameWidth, frameHeight) {
+            const box = imageBBox[key];
+            return { sx: frameIndex * frameWidth, sy: box ? box.y : 0, sw: frameWidth, sh: box ? box.h : frameHeight };
+        }
         function drawTrimmed(img, key, dx, dy, dw, dh) {
             const box = imageBBox[key];
             const sx = box ? box.x : 0, sy = box ? box.y : 0;
@@ -704,8 +713,8 @@
         // the character's translate point (feet-ish center), matching how each
         // draw call below positions them (-w/2, -h*ratio, w, h).
         const SIZE = {
-            playerRun:   { w: 96,  h: 124 },
-            playerJutsu: { w: 140, h: 172 },
+            playerRun:   { w: 104, h: 132 },
+            playerJutsu: { w: 148, h: 180 },
             enemy:       { w: 88,  h: 114 },
             sasuke:      { w: 88,  h: 114 },
             itachi:      { w: 112, h: 128 }
@@ -740,7 +749,7 @@
                         const frameIndex = Math.min(frames - 1, Math.floor(progress * frames));
                         const frameWidth = img.naturalWidth / frames;
                         const frameHeight = img.naturalHeight;
-                        drawFit(img, frameIndex * frameWidth, 0, frameWidth, frameHeight, -jw / 2, -jh * 0.62, jw, jh);
+                        { const r = frameSourceRect(jutsuKey, frameIndex, frameWidth, frameHeight); drawFit(img, r.sx, r.sy, r.sw, r.sh, -jw / 2, -jh * 0.62, jw, jh); }
                     } else {
                         drawTrimmed(img, jutsuKey, -jw / 2, -jh * 0.62, jw, jh);
                     }
@@ -759,7 +768,7 @@
                         const frameIndex = Math.floor(frameCount / 6) % frames;
                         const frameWidth = sheet.naturalWidth / frames;
                         const frameHeight = sheet.naturalHeight;
-                        drawFit(sheet, frameIndex * frameWidth, 0, frameWidth, frameHeight, -rw / 2, -rh * 0.5, rw, rh);
+                        { const r = frameSourceRect(sheetKey, frameIndex, frameWidth, frameHeight); drawFit(sheet, r.sx, r.sy, r.sw, r.sh, -rw / 2, -rh * 0.5, rw, rh); }
                     } else {
                         drawTrimmed(sheet, sheetKey, -rw / 2, -rh * 0.5, rw, rh);
                     }
@@ -939,7 +948,7 @@
                         if (alpha <= 0) return;
                         ctx.save();
                         ctx.globalAlpha = alpha;
-                        drawFit(sheet, frameIndex * frameWidth, 0, frameWidth, frameHeight, t.x + 20 - rw / 2, t.y + 30 - rh * 0.5, rw, rh);
+                        { const r = frameSourceRect(trailSheetKey, frameIndex, frameWidth, frameHeight); drawFit(sheet, r.sx, r.sy, r.sw, r.sh, t.x + 20 - rw / 2, t.y + 30 - rh * 0.5, rw, rh); }
                         ctx.restore();
                     });
                 }
