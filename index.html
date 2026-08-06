@@ -77,7 +77,7 @@
         <button id="start-btn" class="bg-transparent border-0 p-0 transition-all active:scale-95" style="margin-left: 20px;">
             <img src="Startbtn.png" alt="Start Mission" class="w-64 h-64 object-contain" style="filter: drop-shadow(0 4px 12px rgba(0,0,0,0.6));">
         </button>
-        <p id="best-txt" class="text-[10px] text-gray-600 mt-6 uppercase italic"></p>
+        <p id="best-txt" class="text-xs text-orange-300 mt-6 uppercase italic tracking-wider"></p>
     </div>
 
     <canvas id="game"></canvas>
@@ -511,9 +511,9 @@
                 }
             }
             if (player.chakra < player.chakraMax) {
-                player.chakra = Math.min(player.chakraMax, player.chakra + 0.16);
+                player.chakra = Math.min(player.chakraMax, player.chakra + 0.35);
                 chakraFill.style.width = player.chakra + '%';
-                document.getElementById('btn-attack').classList.toggle('depleted', player.chakra < 20);
+                document.getElementById('btn-attack').classList.toggle('depleted', player.chakra < 15);
             }
             if (comboTimer > 0) { comboTimer--; if (comboTimer === 0) breakCombo(); }
 
@@ -666,14 +666,14 @@
             state = 'MENU'; Music.stop(); bossMode = false; overlay.style.display = 'flex';
             document.getElementById('title-txt').innerText = "MISSION SUCCESS";
             document.getElementById('title-txt').style.color = "#4facfe";
-            document.getElementById('desc-txt').innerText = "Itachi has fallen. The village is safe.";
+            document.getElementById('desc-txt').innerText = "";
             renderStats();
         }
         function gameOver() {
             state = 'MENU'; Music.stop(); bossMode = false; overlay.style.display = 'flex';
             document.getElementById('title-txt').innerText = "MISSION FAILED";
             document.getElementById('title-txt').style.color = "#ff4d4d";
-            document.getElementById('desc-txt').innerText = "The Will of Fire flickers... try again.";
+            document.getElementById('desc-txt').innerText = "";
             renderStats();
             Sfx.hit();
         }
@@ -934,9 +934,9 @@
         // ============================================================
         function handleAttack() {
             if (state !== 'PLAY' || player.finisher) return;
-            if (player.chakra < 20 && player.kuramaMode <= 0) { Sfx.deny(); return; }
+            if (player.chakra < 15 && player.kuramaMode <= 0) { Sfx.deny(); return; }
             const type = player.kuramaMode > 0 ? 'beast_bomb' : 'rasenshuriken';
-            if (player.kuramaMode <= 0) { player.chakra -= 20; chakraFill.style.width = player.chakra + '%'; }
+            if (player.kuramaMode <= 0) { player.chakra -= 15; chakraFill.style.width = player.chakra + '%'; }
             entities.push({ type, x: player.x + 20, y: player.y });
             spawnPart(player.x + 20, player.y, player.kuramaMode > 0 ? '#f00' : '#4facfe', 15);
             player.attackAnim = player.attackAnimMax;
