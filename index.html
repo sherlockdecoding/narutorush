@@ -792,15 +792,7 @@
             ctx.fillStyle = 'rgba(255,255,255,0.05)';
             clouds.forEach(c => { ctx.beginPath(); ctx.ellipse(c.x, c.y, c.w, c.w*0.35, 0, 0, 7); ctx.fill(); });
 
-            // far skyline
-            ctx.fillStyle = '#0a0a14';
-            ctx.beginPath();
-            ctx.moveTo(0, 260);
-            ctx.lineTo(40, 200); ctx.lineTo(90, 250); ctx.lineTo(140, 180);
-            ctx.lineTo(190, 240); ctx.lineTo(240, 190); ctx.lineTo(290, 245);
-            ctx.lineTo(340, 210); ctx.lineTo(V_WIDTH, 255);
-            ctx.lineTo(V_WIDTH, 300); ctx.lineTo(0, 300); ctx.fill();
-
+            
             // mid rooftops with lantern glow (parallax)
             roofs.forEach(r => {
                 ctx.fillStyle = '#12121e';
