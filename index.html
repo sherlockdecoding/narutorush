@@ -793,20 +793,7 @@
             clouds.forEach(c => { ctx.beginPath(); ctx.ellipse(c.x, c.y, c.w, c.w*0.35, 0, 0, 7); ctx.fill(); });
 
             
-            // mid rooftops with lantern glow (parallax)
-            roofs.forEach(r => {
-                ctx.fillStyle = '#12121e';
-                ctx.beginPath();
-                ctx.moveTo(r.x, r.y + 30); ctx.lineTo(r.x + r.w/2, r.y); ctx.lineTo(r.x + r.w, r.y + 30);
-                ctx.lineTo(r.x + r.w, r.y + 46); ctx.lineTo(r.x, r.y + 46); ctx.fill();
-                if (r.lantern) {
-                    ctx.save();
-                    ctx.globalAlpha = 0.7 + Math.sin(frameCount*0.05 + r.x)*0.2;
-                    ctx.fillStyle = '#ffb347'; ctx.shadowBlur = 12; ctx.shadowColor = '#ffb347';
-                    ctx.beginPath(); ctx.arc(r.x + r.w/2, r.y + 18, 3, 0, 7); ctx.fill();
-                    ctx.restore();
-                }
-            });
+            
 
             // speed streak lines (near layer)
             ctx.strokeStyle = kMode ? 'rgba(150,0,0,0.5)' : 'rgba(255,255,255,0.08)';
