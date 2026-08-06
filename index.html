@@ -72,6 +72,7 @@
 
     <div id="overlay">
         <h1 id="title-txt" class="text-5xl text-orange-500 mb-2 italic glow">SHINOBI RUSH</h1>
+                <p id="desc-txt" class="text-sm text-gray-300 mt-2 mb-4" style="font-family:'Rajdhani',sans-serif;"></p>
                 <div id="stats-box" class="hidden flex flex-col mb-6"></div>
         <button id="start-btn" class="bg-transparent border-0 p-0 transition-all active:scale-95" style="margin-left: 20px;">
             <img src="Startbtn.png" alt="Start Mission" class="w-64 h-64 object-contain" style="filter: drop-shadow(0 4px 12px rgba(0,0,0,0.6));">
@@ -388,7 +389,7 @@
         let scale = 1;
 
         let state = 'MENU';
-        let sessionBest = { score: 0, distance: 0 };
+        let sessionBest = { score: 0, distance: 0, combo: 0 };
         let player = {
             x: 60, y: 0, targetX: 60, side: 0, hp: 100,
             kuramaMode: 0, kuramaMax: 400, sasukeTimer: 0, trail: [],
@@ -406,6 +407,7 @@
         let score = 0;
         let combo = 0;
         let comboTimer = 0;
+        let maxCombo = 0;
         let frameCount = 0;
         let shake = 0;
         let punch = 0;
@@ -436,7 +438,7 @@
             if (x !== undefined) spawnFloater(x, y, '+' + amount, '#fbbf24');
         }
         function registerKill(x, y, isBoss) {
-            combo++; comboTimer = 100;
+            combo++; comboTimer = 100; maxCombo = Math.max(maxCombo, combo);
             const bonus = 50 + combo * 10;
             addScore(bonus, x, y);
             comboTxt.innerText = 'COMBO x' + combo;
@@ -456,7 +458,7 @@
             player.hp = 100; player.chakra = 100; player.kuramaMode = 0; player.sasukeTimer = 0;
             player.finisher = false; player.side = 0; player.targetX = 60; player.x = 60; player.y = player.defaultY;
             player.attackAnim = 0;
-            distance = 0; score = 0; combo = 0; comboTimer = 0;
+            distance = 0; score = 0; combo = 0; comboTimer = 0; maxCombo = 0;
             entities = []; particles = []; floaters = [];
             itachiRef = null; bossWarned = false; frameCount = 0;
             punch = 0; hitStop = 0; jutsuFlash = 0;
@@ -651,12 +653,13 @@
         function renderStats() {
             sessionBest.score = Math.max(sessionBest.score, score);
             sessionBest.distance = Math.max(sessionBest.distance, Math.floor(distance));
+            sessionBest.combo = Math.max(sessionBest.combo, maxCombo);
             statsBox.classList.remove('hidden');
             statsBox.innerHTML =
                 '<div class="stat-row"><span>Distance</span><b>' + Math.floor(distance) + 'm</b></div>' +
                 '<div class="stat-row"><span>Score</span><b>' + score + '</b></div>' +
-                '<div class="stat-row"><span>Best Combo</span><b>x' + Math.max(combo,1) + '</b></div>';
-            bestTxt.innerText = 'SESSION BEST — ' + sessionBest.score + ' PTS · ' + sessionBest.distance + 'M';
+                '<div class="stat-row"><span>Best Combo</span><b>x' + Math.max(maxCombo,1) + '</b></div>';
+            bestTxt.innerText = 'SESSION BEST — ' + sessionBest.score + ' PTS · ' + sessionBest.distance + 'M · x' + sessionBest.combo + ' COMBO';
             overlay.classList.remove('show-anim'); void overlay.offsetWidth; overlay.classList.add('show-anim');
         }
         function showWinScreen() {
