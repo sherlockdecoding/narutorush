@@ -90,17 +90,17 @@
         // ============================================================
         // IMAGE LOADING
         // ============================================================
+        const images = {};
         const imageSources = {
-    narutoRun: '\u200bnaruto-run.png',
-    narutoJutsu: '\u200bnaruto-jutsu.png',
-    kuramaRun: '1000022158.png',
-    kuramaJutsu: '1000022161.png',
-    enemyShinobi: '1000022167.png',
-    sasuke: '1000022170.png',
-    itachiBase: '1000022174.png',
-    itachiAttack: '1000022176.png',
-    background: 'Background.png'
-};
+            narutoRun: '\u200bnaruto-run.png',
+            narutoJutsu: '\u200bnaruto-jutsu.png',
+            kuramaRun: '1000022158.png',
+            kuramaJutsu: '1000022161.png',
+            enemyShinobi: '1000022167.png',
+            sasuke: '1000022170.png',
+            itachiBase: '1000022174.png',
+            itachiAttack: '1000022176.png'
+        };
 
         // Explicit frame counts for sprite sheets. FIX: the previous code guessed
         // whether an image was a multi-frame sheet by comparing width to height
@@ -766,15 +766,12 @@
             if (shake > 0) ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
 
             const kMode = player.kuramaMode > 0;
-            if (imgReady('background')) {
-                ctx.drawImage(images.background, 0, 0, V_WIDTH, V_HEIGHT);
-            } else {
-                const bg = ctx.createLinearGradient(0, 0, 0, V_HEIGHT);
-                if (kMode) { bg.addColorStop(0, '#2a0a05'); bg.addColorStop(1, '#0a0202'); }
-                else if (bossMode) { bg.addColorStop(0, '#0a0510'); bg.addColorStop(1, '#020205'); }
-                else { bg.addColorStop(0, '#050510'); bg.addColorStop(1, '#020205'); }
-                ctx.fillStyle = bg; ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
-            }
+            const bg = ctx.createLinearGradient(0, 0, 0, V_HEIGHT);
+            if (kMode) { bg.addColorStop(0, '#2a0a05'); bg.addColorStop(1, '#0a0202'); }
+            else if (bossMode) { bg.addColorStop(0, '#0a0510'); bg.addColorStop(1, '#020205'); }
+            else { bg.addColorStop(0, '#050510'); bg.addColorStop(1, '#020205'); }
+            ctx.fillStyle = bg; ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
+
             // moon
             ctx.save(); ctx.globalAlpha = 0.9;
             ctx.fillStyle = bossMode ? '#ff5555' : '#f1f5ff';
@@ -981,4 +978,4 @@
         resize(); draw(); setInterval(update, 1000/60);
     </script>
 </body>
-</html>
+                                          </html>
