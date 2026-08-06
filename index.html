@@ -391,6 +391,7 @@
         let scale = 1;
 
         let state = 'MENU';
+        let overlayReadyAt = 0;
         let sessionBest = { score: 0, distance: 0, combo: 0 };
         let player = {
             x: 60, y: 0, targetX: 60, side: 0, hp: 100,
@@ -453,6 +454,7 @@
         function breakCombo() { if (combo > 0) { combo = 0; comboTimer = 0; comboTxt.style.opacity = '0'; } }
 
         function initGame() {
+            if (Date.now() < overlayReadyAt) return; // ignore accidental taps right after the overlay appears
             if (audioCtx.state === 'suspended') audioCtx.resume();
             bossMode = false;
             Music.start();
@@ -666,6 +668,7 @@
         }
         function showWinScreen() {
             state = 'MENU'; Music.stop(); bossMode = false; overlay.style.display = 'flex';
+            overlayReadyAt = Date.now() + 700;
             document.getElementById('title-txt').innerText = "MISSION SUCCESS";
             document.getElementById('title-txt').style.color = "#4facfe";
             document.getElementById('desc-txt').innerText = "";
@@ -673,6 +676,7 @@
         }
         function gameOver() {
             state = 'MENU'; Music.stop(); bossMode = false; overlay.style.display = 'flex';
+            overlayReadyAt = Date.now() + 700;
             document.getElementById('title-txt').innerText = "MISSION FAILED";
             document.getElementById('title-txt').style.color = "#ff4d4d";
             document.getElementById('desc-txt').innerText = "";
@@ -961,7 +965,7 @@
             if (e.code === 'Space' || e.code === 'ArrowUp') handleDash();
             if (e.code === 'KeyJ' || e.code === 'Enter') handleAttack();
         });
-        document.getElementById('start-btn').addEventListener('click', initGame);
+        document.getElementById('start-btn').addEventListener('click', (e) => { e.preventDefault(); initGame(); });
         window.addEventListener('resize', resize);
         resize(); draw(); setInterval(update, 1000/60);
     </script>
