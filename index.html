@@ -8,9 +8,11 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Rajdhani:wght@500;700&display=swap');
         body { margin: 0; overflow: hidden; background: #020205; font-family: 'Permanent Marker', cursive; touch-action: none; }
-        canvas { display: block; margin: 0 auto; }
-        #ui { position: absolute; top: env(safe-area-inset-top, 20px); left: 0; right: 0; pointer-events: none; padding: 0 20px; z-index: 50; font-family: 'Rajdhani', sans-serif; }
-        #controls { position: absolute; bottom: env(safe-area-inset-bottom, 30px); left: 0; right: 0; display: flex; justify-content: space-around; z-index: 50; }
+        canvas { display: block; }
+        #stage-wrapper { position: fixed; inset: 0; background: #020205; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        #stage { position: relative; width: 400px; height: 800px; transform-origin: center center; overflow: hidden; }
+        #ui { position: absolute; top: 20px; left: 0; right: 0; pointer-events: none; padding: 0 20px; z-index: 50; font-family: 'Rajdhani', sans-serif; }
+        #controls { position: absolute; bottom: 30px; left: 0; right: 0; display: flex; justify-content: space-around; z-index: 50; }
         .ctrl-btn {
             width: 85px; height: 85px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.2);
             background: rgba(0,0,0,0.6); color: white; display: flex; flex-direction: column;
@@ -35,6 +37,8 @@
         #debug-panel { position: absolute; bottom: 4px; left: 4px; z-index: 999; font-family: monospace; font-size: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 4px 6px; border-radius: 4px; pointer-events: none; white-space: pre; display: none; }    </style>
 </head>
 <body>
+    <div id="stage-wrapper">
+    <div id="stage">
     <div id="ui">
         <div class="flex justify-between items-start">
             <div>
@@ -83,6 +87,8 @@
     </div>
 
     <canvas id="game"></canvas>
+    </div>
+    </div>
 
     <script>
         // ============================================================
@@ -387,8 +393,9 @@
         if (DEBUG) debugPanel.style.display = 'block';
 
         const V_WIDTH = 400;
-        let V_HEIGHT = 800;
+        const V_HEIGHT = 800;
         let scale = 1;
+        const stageEl = document.getElementById('stage');
 
         let state = 'MENU';
         let overlayReadyAt = 0;
@@ -420,10 +427,13 @@
         let bossWarned = false;
 
         function resize() {
-            scale = Math.min(window.innerWidth / V_WIDTH, window.innerHeight / 800);
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            V_HEIGHT = window.innerHeight / scale;
+            // Scale the whole fixed 400x800 stage (canvas + menu + HUD + buttons) as one
+            // unit to fit any screen, letterboxing the extra space. This keeps every
+            // piece of the UI in exactly the same relative spot on every device.
+            const fitScale = Math.min(window.innerWidth / V_WIDTH, window.innerHeight / V_HEIGHT);
+            stageEl.style.transform = `scale(${fitScale})`;
+            canvas.width = V_WIDTH;
+            canvas.height = V_HEIGHT;
             player.defaultY = V_HEIGHT - 180;
             if (!player.finisher) player.y = player.defaultY;
         }
