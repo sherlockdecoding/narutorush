@@ -34,7 +34,10 @@
         @keyframes overlayIn { from { opacity:0; transform: scale(0.96); } to { opacity:1; transform: scale(1); } }
         #overlay.show-anim { animation: overlayIn 0.4s ease-out; }
         #title-txt { position: absolute; top: 33%; left: 0; right: 0; transform: translateY(-50%); }
-        #debug-panel { position: absolute; bottom: 4px; left: 4px; z-index: 999; font-family: monospace; font-size: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 4px 6px; border-radius: 4px; pointer-events: none; white-space: pre; display: none; }    </style>
+        #debug-panel { position: absolute; bottom: 4px; left: 4px; z-index: 999; font-family: monospace; font-size: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 4px 6px; border-radius: 4px; pointer-events: none; white-space: pre; display: none; }
+        #itachi-cutscene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 110; display: none; background: #000; }
+        canvas.xray-flash { filter: invert(1) hue-rotate(180deg) saturate(2) contrast(1.3); }
+    </style>
 </head>
 <body>
     <div id="stage-wrapper">
@@ -87,6 +90,7 @@
     </div>
 
     <canvas id="game"></canvas>
+    <video id="itachi-cutscene" src="Itachi.mp4" playsinline></video>
     </div>
     </div>
 
@@ -104,7 +108,10 @@
     sasuke: '1000022170.png',
     itachiBase: '1000022174.png',
     itachiAttack: '1000022176.png',
-    background: 'Background.png'
+    background: 'Background.png',
+    rasenshurikenSprite: 'rasensuriken.png',
+    chidoriSprite: 'Chidori.png',
+    amaterasuSprite: 'Amaterasu.png'
 };
 
         // Explicit frame counts for sprite sheets. FIX: the previous code guessed
@@ -121,7 +128,10 @@
             narutoRun: 4,   // confirmed: genuine 4-frame sheet, evenly spaced
             kuramaRun: 4,
             narutoJutsu: 1, // confirmed: single pose on an oversized padded canvas
-            kuramaJutsu: 1
+            kuramaJutsu: 1,
+            rasenshurikenSprite: 6,
+            chidoriSprite: 6,
+            amaterasuSprite: 6
         };
 
         // Track per-image load state explicitly instead of just counting successes.
@@ -230,6 +240,20 @@
             const sw = box ? box.w : img.naturalWidth, sh = box ? box.h : img.naturalHeight;
             drawFit(img, sx, sy, sw, sh, dx, dy, dw, dh);
         }
+        // Draws a looping 6-frame sprite-sheet effect (rasenshuriken/chidori/amaterasu)
+        // centered on the current translate origin. Returns false if the image isn't
+        // loaded yet so the caller can fall back to a procedural drawing.
+        function drawSpriteEntity(key, size, frameSpeed = 4) {
+            if (!imgReady(key)) return false;
+            const img = images[key];
+            const frames = spriteFrames[key] || 1;
+            const frameIndex = Math.floor(frameCount / frameSpeed) % frames;
+            const frameWidth = img.naturalWidth / frames;
+            const frameHeight = img.naturalHeight;
+            const r = frameSourceRect(key, frameIndex, frameWidth, frameHeight);
+            drawFit(img, r.sx, r.sy, r.sw, r.sh, -size / 2, -size / 2, size, size);
+            return true;
+        }
 
         // ============================================================
         // AUDIO
@@ -250,6 +274,20 @@
                 '[music] Failed to load "Narutomusic.mp3". Make sure the file is uploaded ' +
                 'to the same folder as index.html and the filename matches exactly (case-sensitive).'
             );
+        });
+
+        // One-shot SFX for picking up the Sasuke Assist item.
+        const narutoScream = new Audio('Narutoscream.mp3');
+        narutoScream.volume = 0.9;
+        narutoScream.addEventListener('error', () => {
+            console.error('[audio] Failed to load "Narutoscream.mp3". Make sure it is next to index.html.');
+        });
+
+        // Amaterasu cutscene sting, synced to the Itachi.mp4 cutscene at 00:04.
+        const amaterasuSfx = new Audio('amaterasu.mp3');
+        amaterasuSfx.volume = 0.85;
+        amaterasuSfx.addEventListener('error', () => {
+            console.error('[audio] Failed to load "amaterasu.mp3". Make sure it is next to index.html.');
         });
 
         const Music = {
@@ -424,6 +462,8 @@
         let hitStop = 0;
         let jutsuFlash = 0;
         let itachiRef = null;
+        let itachiEncounter = 0; // 0 = not yet fought, 1 = first fight cleared (retreated), 2 = final fight
+        let nextItachiDistance = 1200;
         let bossWarned = false;
 
         function resize() {
@@ -475,6 +515,10 @@
             distance = 0; score = 0; combo = 0; comboTimer = 0; maxCombo = 0;
             entities = []; particles = []; floaters = [];
             itachiRef = null; bossWarned = false; frameCount = 0;
+            itachiEncounter = 0; nextItachiDistance = 1200;
+            document.getElementById('itachi-cutscene').pause();
+            document.getElementById('itachi-cutscene').style.display = 'none';
+            canvas.classList.remove('xray-flash');
             punch = 0; hitStop = 0; jutsuFlash = 0;
             overlay.style.display = 'none';
             document.body.classList.remove('flash-red');
@@ -554,17 +598,29 @@
                     if (Math.random() < 0.25) entities.push({ type: 'shuriken', x: Math.random() * V_WIDTH, y: -50 });
                 }
             }
-            if (Math.floor(distance) >= 1200 && !itachiRef) {
-                itachiRef = { type: 'itachi', x: 200, y: -100, targetX: 200, hp: 300, maxHp: 300, phase: 1, phaseAnnounced: false, fireRate: 50 };
+            if (Math.floor(distance) >= nextItachiDistance && !itachiRef && itachiEncounter < 2) {
+                const encounter = itachiEncounter === 0 ? 1 : 2;
+                itachiRef = {
+                    type: 'itachi', x: 200, y: -100, targetX: 200, hp: 300, maxHp: 300,
+                    phase: 1, phaseAnnounced: false, fireRate: 50,
+                    encounter, usingAmaterasu: false, amaterasuTriggered: false
+                };
                 entities.push(itachiRef);
-                phaseLabel.innerText = "The Final Confrontation";
+                phaseLabel.innerText = encounter === 1 ? "The Final Confrontation" : "Itachi Returns";
                 bossMode = true; Music.retune(); Sfx.powerup();
             }
-            if (itachiRef && itachiRef.hp <= 150 && !itachiRef.phaseAnnounced) {
+            if (itachiRef && itachiRef.encounter === 1 && itachiRef.hp <= 150 && !itachiRef.phaseAnnounced) {
                 itachiRef.phaseAnnounced = true; itachiRef.phase = 2; itachiRef.fireRate = 30;
                 phaseLabel.innerText = "Mangekyō Unleashed";
                 shake = 25; punch = 1; Sfx.warning();
                 spawnFloater(itachiRef.x, itachiRef.y - 40, 'SHARINGAN!', '#ff3333');
+            }
+            // Second encounter: instead of the old "double the kunai" phase-2, this
+            // triggers the Itachi.mp4 cutscene. When it resolves, Itachi switches
+            // from throwing kunai to raining down Amaterasu flames instead.
+            if (itachiRef && itachiRef.encounter === 2 && itachiRef.hp <= 150 && !itachiRef.amaterasuTriggered) {
+                itachiRef.amaterasuTriggered = true;
+                startAmaterasuCutscene();
             }
 
             for (let i = entities.length - 1; i >= 0; i--) {
@@ -585,7 +641,8 @@
                     if (e.telegraph && untilFire === 15) Sfx.telegraph();
                     if (frameCount % rate === 0) {
                         const count = e.phase === 2 ? 6 : (e.hp < 150 ? 5 : 3);
-                        for(let k=0; k<count; k++) entities.push({ type: 'kunai', x: e.x + (k - Math.floor(count/2))*40, y: e.y + 30 });
+                        const projType = e.usingAmaterasu ? 'amaterasu_flame' : 'kunai';
+                        for(let k=0; k<count; k++) entities.push({ type: projType, x: e.x + (k - Math.floor(count/2))*40, y: e.y + 30 });
                     }
                 } else { e.y += 12; }
 
@@ -593,7 +650,7 @@
                 const pdist = Math.sqrt(pdx*pdx + pdy*pdy);
                 const isPickup = ['ramen', 'scroll', 'bandage'].includes(e.type);
                 if (pdist < (isPickup ? 60 : 45)) {
-                    if (['shuriken', 'shinobi', 'kunai'].includes(e.type)) {
+                    if (['shuriken', 'shinobi', 'kunai', 'amaterasu_flame'].includes(e.type)) {
                         if (player.kuramaMode <= 0) {
                             player.hp -= 15; shake = 15; punch = 0.6; hitStop = 4; Sfx.hit();
                             spawnPart(e.x, e.y, '#f00', 10);
@@ -609,6 +666,8 @@
                         spawnPart(player.x+20, player.y+30, '#ff8000', 20); entities.splice(i, 1);
                     } else if (e.type === 'bandage') {
                         player.sasukeTimer = 600; addScore(15, e.x, e.y); Sfx.powerup(); entities.splice(i, 1);
+                        narutoScream.currentTime = 0;
+                        narutoScream.play().catch(err => console.warn('[naruto scream] play blocked/failed:', err));
                     }
                 }
                 if (['rasenshuriken', 'beast_bomb', 'chidori_senbon'].includes(e.type)) {
@@ -624,7 +683,14 @@
                     });
                 }
                 if (e.type === 'shinobi' && e.hp <= 0 && !e.counted) { e.counted = true; registerKill(e.x, e.y, false); }
-                if (e.type === 'itachi' && e.hp <= 0) { registerKill(e.x, e.y, true); startFinisher(e); entities.splice(i, 1); }
+                if (e.type === 'itachi' && e.hp <= 0) {
+                    if (e.encounter === 1) {
+                        retreatItachi(e);
+                        entities.splice(i, 1);
+                    } else {
+                        registerKill(e.x, e.y, true); startFinisher(e); entities.splice(i, 1);
+                    }
+                }
                 else if (e.y < -300 || e.y > V_HEIGHT + 300 || e.hp <= 0 || e.dead) { entities.splice(i, 1); }
             }
             floaters.forEach((f, i) => { f.y += f.vy; f.life -= 0.02; if (f.life <= 0) floaters.splice(i, 1); });
@@ -647,6 +713,72 @@
             entities = [];
             document.body.classList.add('flash-red');
             Sfx.powerup();
+        }
+
+        // First encounter: Itachi doesn't die, he flees. The run continues exactly
+        // as before (same spawns, same music) until he ambushes again later.
+        function retreatItachi(e) {
+            addScore(80, e.x, e.y);
+            spawnFloater(e.x, e.y - 40, 'ITACHI RETREATS!', '#ff6666');
+            spawnPart(e.x, e.y, '#7f1d1d', 20);
+            Sfx.warning();
+            itachiRef = null;
+            itachiEncounter = 1;
+            nextItachiDistance = distance + 500;
+            bossMode = false; Music.retune();
+            phaseLabel.innerText = "Infiltration";
+        }
+
+        // Second encounter, half HP: play the Itachi.mp4 cutscene, sync amaterasu.mp3
+        // to the 00:04 mark, then apply an X-ray flash before Itachi switches from
+        // kunai to Amaterasu flames for the remainder of the fight.
+        function startAmaterasuCutscene() {
+            state = 'CUTSCENE';
+            bgMusic.pause();
+            const video = document.getElementById('itachi-cutscene');
+            let stungAt4s = false;
+            video.currentTime = 0;
+            video.style.display = 'block';
+
+            const onTime = () => {
+                if (!stungAt4s && video.currentTime >= 4) {
+                    stungAt4s = true;
+                    amaterasuSfx.currentTime = 0;
+                    amaterasuSfx.play().catch(err => console.warn('[amaterasu sfx] play blocked/failed:', err));
+                }
+            };
+            const onEnd = () => {
+                video.removeEventListener('timeupdate', onTime);
+                video.removeEventListener('ended', onEnd);
+                video.style.display = 'none';
+                video.pause();
+                xrayFlash(() => {
+                    if (itachiRef) { itachiRef.usingAmaterasu = true; itachiRef.fireRate = 35; }
+                    phaseLabel.innerText = "Amaterasu Unleashed";
+                    shake = 25; punch = 1;
+                    const fx = itachiRef ? itachiRef.x : V_WIDTH / 2, fy = itachiRef ? itachiRef.y - 40 : 200;
+                    spawnFloater(fx, fy, 'AMATERASU!', '#ff2200');
+                    if (musicPlaying) bgMusic.play().catch(() => {});
+                    state = 'PLAY';
+                });
+            };
+            video.addEventListener('timeupdate', onTime);
+            video.addEventListener('ended', onEnd);
+            video.play().catch(err => {
+                console.warn('[cutscene] Itachi.mp4 play blocked/failed:', err);
+                // Don't let a blocked/missing video file soft-lock the game.
+                onEnd();
+            });
+        }
+
+        // Brief full-screen "x-ray" filter flash used as the transition out of the
+        // Amaterasu cutscene, then resumes gameplay via the callback.
+        function xrayFlash(callback) {
+            canvas.classList.add('xray-flash');
+            setTimeout(() => {
+                canvas.classList.remove('xray-flash');
+                callback();
+            }, 450);
         }
         function updateFinisher() {
             player.finisherStep++;
@@ -888,7 +1020,7 @@
                         ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4; ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
                         ctx.beginPath(); ctx.arc(0, 0, 45, 0, 7); ctx.stroke(); ctx.restore();
                     }
-                    const itachiKey = (e.phase === 2 || e.telegraph) ? 'itachiAttack' : 'itachiBase';
+                    const itachiKey = (e.phase === 2 || e.telegraph || e.usingAmaterasu) ? 'itachiAttack' : 'itachiBase';
                     if (imgReady(itachiKey)) {
                         drawTrimmed(images[itachiKey], itachiKey, -SIZE.itachi.w / 2, -SIZE.itachi.h * 0.55, SIZE.itachi.w, SIZE.itachi.h);
                     } else {
@@ -901,12 +1033,27 @@
                     ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
                     for (let n=1; n<4; n++) { ctx.beginPath(); ctx.moveTo(-50+n*25, -65); ctx.lineTo(-50+n*25, -57); ctx.stroke(); }
                 }
-                else if (e.type === 'rasenshuriken') { ctx.rotate(frameCount*0.6); ctx.fillStyle = '#4facfe'; ctx.shadowBlur = 15; ctx.shadowColor = '#4facfe'; for(let i=0; i<4; i++) { ctx.rotate(Math.PI/2); ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,30,0,1.2); ctx.fill(); } }
+                else if (e.type === 'rasenshuriken') {
+                    if (!drawSpriteEntity('rasenshurikenSprite', 74, 3)) {
+                        ctx.rotate(frameCount*0.6); ctx.fillStyle = '#4facfe'; ctx.shadowBlur = 15; ctx.shadowColor = '#4facfe';
+                        for(let i=0; i<4; i++) { ctx.rotate(Math.PI/2); ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,30,0,1.2); ctx.fill(); }
+                    }
+                }
                 else if (e.type === 'beast_bomb') { ctx.shadowBlur = 30; ctx.shadowColor = '#f00'; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(0, 0, 35, 0, 7); ctx.fill(); ctx.strokeStyle = '#f00'; ctx.lineWidth = 4; ctx.stroke(); }
                 else if (e.type === 'ramen') { ctx.shadowBlur = 18; ctx.shadowColor = '#fff'; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI); ctx.fill(); ctx.fillStyle = '#f00'; ctx.fillRect(-16, -6, 32, 6); ctx.shadowBlur = 0; }
                 else if (e.type === 'scroll') { ctx.shadowBlur = 15; ctx.shadowColor = '#fbbf24'; ctx.fillStyle = '#fbbf24'; ctx.fillRect(-15, -12, 30, 24); ctx.fillStyle = '#991b1b'; ctx.fillRect(-22, -12, 7, 24); ctx.fillRect(15, -12, 7, 24); }
                 else if (e.type === 'bandage') { ctx.fillStyle = '#fff'; ctx.fillRect(-18, -10, 36, 20); ctx.fillStyle = '#4facfe'; ctx.fillRect(-3, -10, 6, 20); }
-                else if (e.type === 'chidori_senbon') { ctx.shadowBlur = 24; ctx.shadowColor = '#4facfe'; ctx.fillStyle = '#e0f7ff'; ctx.fillRect(-2, -26, 4, 52); }
+                else if (e.type === 'amaterasu_flame') {
+                    if (!drawSpriteEntity('amaterasuSprite', 60, 3)) {
+                        ctx.shadowBlur = 20; ctx.shadowColor = '#440022'; ctx.fillStyle = '#050005';
+                        ctx.beginPath(); ctx.moveTo(0,-26); ctx.quadraticCurveTo(14,-6,8,14); ctx.quadraticCurveTo(0,24,-8,14); ctx.quadraticCurveTo(-14,-6,0,-26); ctx.fill();
+                    }
+                }
+                else if (e.type === 'chidori_senbon') {
+                    if (!drawSpriteEntity('chidoriSprite', 64, 3)) {
+                        ctx.shadowBlur = 24; ctx.shadowColor = '#4facfe'; ctx.fillStyle = '#e0f7ff'; ctx.fillRect(-2, -26, 4, 52);
+                    }
+                }
                 ctx.restore();
             });
 
@@ -977,6 +1124,9 @@
         });
         document.getElementById('start-btn').addEventListener('click', (e) => { e.preventDefault(); initGame(); });
         window.addEventListener('resize', resize);
+        document.getElementById('itachi-cutscene').addEventListener('error', () => {
+            console.error('[cutscene] Failed to load "Itachi.mp4". Make sure it is next to index.html.');
+        });
         resize(); draw(); setInterval(update, 1000/60);
     </script>
 </body>
