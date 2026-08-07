@@ -586,7 +586,10 @@
                 if (l.y > V_HEIGHT + 20) { l.y = -20; l.x = Math.random()*V_WIDTH; }
             });
 
-            if (distance < 1200) {
+            // Spawn regular enemies/items whenever Itachi isn't the one on screen —
+            // this covers both the run up to the first encounter AND the stretch
+            // between his retreat and the second encounter, not just "before 1200m".
+            if (!itachiRef && itachiEncounter < 2) {
                 if (frameCount % 100 === 0) {
                     const items = ['ramen', 'scroll', 'bandage'];
                     const type = items[Math.floor(Math.random() * items.length)];
@@ -1050,7 +1053,12 @@
                     }
                 }
                 else if (e.type === 'chidori_senbon') {
+                    // The sprite sheet's spark points right by default; the senbon
+                    // actually travels upward toward enemies, so rotate the point
+                    // to face up-screen.
+                    ctx.rotate(-Math.PI / 2);
                     if (!drawSpriteEntity('chidoriSprite', 64, 3)) {
+                        ctx.rotate(Math.PI / 2);
                         ctx.shadowBlur = 24; ctx.shadowColor = '#4facfe'; ctx.fillStyle = '#e0f7ff'; ctx.fillRect(-2, -26, 4, 52);
                     }
                 }
