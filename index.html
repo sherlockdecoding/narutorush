@@ -36,7 +36,7 @@
         #title-txt { position: absolute; top: 33%; left: 0; right: 0; transform: translateY(-50%); }
         #debug-panel { position: absolute; bottom: 4px; left: 4px; z-index: 999; font-family: monospace; font-size: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 4px 6px; border-radius: 4px; pointer-events: none; white-space: pre; display: none; }
         #itachi-cutscene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 110; display: none; background: #000; }
-        canvas.xray-flash { filter: invert(1) hue-rotate(180deg) saturate(2) contrast(1.3); }
+        canvas.xray-flash { filter: invert(1) hue-rotate(180deg) saturate(2) contrast(1.3); transition: filter 0.35s ease; }
     </style>
 </head>
 <body>
@@ -644,8 +644,20 @@
                     if (e.telegraph && untilFire === 15) Sfx.telegraph();
                     if (frameCount % rate === 0) {
                         const count = e.phase === 2 ? 6 : (e.hp < 150 ? 5 : 3);
-                        const projType = e.usingAmaterasu ? 'amaterasu_flame' : 'kunai';
-                        for(let k=0; k<count; k++) entities.push({ type: projType, x: e.x + (k - Math.floor(count/2))*40, y: e.y + 30 });
+                        if (e.usingAmaterasu) {
+                            // Amaterasu wall: fills one whole lane, top to bottom, so the
+                            // player has to read which lane it's in and dash to the other
+                            // one — rather than dodging scattered projectiles individually.
+                            const wallSide = Math.random() > 0.5 ? 0 : 1;
+                            const wallX = wallSide === 0 ? 80 : V_WIDTH - 80;
+                            for (let k = 0; k < count; k++) {
+                                entities.push({ type: 'amaterasu_flame', x: wallX, y: e.y + 30 - k * 50 });
+                            }
+                        } else {
+                            for (let k = 0; k < count; k++) {
+                                entities.push({ type: 'kunai', x: e.x + (k - Math.floor(count/2))*40, y: e.y + 30 });
+                            }
+                        }
                     }
                 } else { e.y += 12; }
 
@@ -774,14 +786,14 @@
             });
         }
 
-        // Brief full-screen "x-ray" filter flash used as the transition out of the
+        // Full-screen "x-ray" filter flash used as the transition out of the
         // Amaterasu cutscene, then resumes gameplay via the callback.
         function xrayFlash(callback) {
             canvas.classList.add('xray-flash');
             setTimeout(() => {
                 canvas.classList.remove('xray-flash');
                 callback();
-            }, 450);
+            }, 1400);
         }
         function updateFinisher() {
             player.finisherStep++;
@@ -1047,7 +1059,7 @@
                 else if (e.type === 'scroll') { ctx.shadowBlur = 15; ctx.shadowColor = '#fbbf24'; ctx.fillStyle = '#fbbf24'; ctx.fillRect(-15, -12, 30, 24); ctx.fillStyle = '#991b1b'; ctx.fillRect(-22, -12, 7, 24); ctx.fillRect(15, -12, 7, 24); }
                 else if (e.type === 'bandage') { ctx.fillStyle = '#fff'; ctx.fillRect(-18, -10, 36, 20); ctx.fillStyle = '#4facfe'; ctx.fillRect(-3, -10, 6, 20); }
                 else if (e.type === 'amaterasu_flame') {
-                    if (!drawSpriteEntity('amaterasuSprite', 60, 3)) {
+                    if (!drawSpriteEntity('amaterasuSprite', 74, 3)) {
                         ctx.shadowBlur = 20; ctx.shadowColor = '#440022'; ctx.fillStyle = '#050005';
                         ctx.beginPath(); ctx.moveTo(0,-26); ctx.quadraticCurveTo(14,-6,8,14); ctx.quadraticCurveTo(0,24,-8,14); ctx.quadraticCurveTo(-14,-6,0,-26); ctx.fill();
                     }
